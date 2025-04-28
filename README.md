@@ -21,7 +21,7 @@ An autonomous agent that helps users shop on Amazon using natural language proce
 
 1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/tuanyuan2008/amazon-shopping-assistant.git
 cd amazon-shopping-assistant
 ```
 
@@ -61,6 +61,7 @@ cd amazon-shopping-assistant
 
 5. Run the agent:
 ```bash
+safaridriver --enable
 python main.py
 ```
 

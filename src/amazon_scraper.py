@@ -1,7 +1,9 @@
 from typing import Dict, List, Optional
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.safari.service import Service as SafariService
+from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.safari.options import Options as SafariOptions
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -10,6 +12,8 @@ import logging
 from bs4 import BeautifulSoup
 import time
 import random
+import subprocess
+import sys
 
 from .utils.rate_limiter import RateLimiter
 from .utils.config import Config
@@ -18,12 +22,43 @@ class AmazonScraper:
     def __init__(self, rate_limiter: RateLimiter):
         self.config = Config()
         self.rate_limiter = rate_limiter
-        self.driver = self._setup_driver()
         self.logger = logging.getLogger(__name__)
+        self.driver = self._setup_driver()
 
-    def _setup_driver(self) -> webdriver.Chrome:
-        """Set up and configure the Chrome WebDriver."""
-        chrome_options = Options()
+    def _setup_driver(self) -> webdriver.Remote:
+        """Set up and configure the WebDriver, trying Safari first, then Chrome."""
+        try:
+            return self._setup_safari()
+        except Exception as e:
+            self.logger.warning(f"Failed to set up Safari: {str(e)}. Trying Chrome...")
+            try:
+                return self._setup_chrome()
+            except Exception as e:
+                self.logger.error(f"Failed to set up Chrome: {str(e)}")
+                raise RuntimeError("Could not set up either Safari or Chrome. Please make sure Safari's WebDriver is enabled by running 'safaridriver --enable' in terminal.")
+
+    def _kill_safaridriver(self):
+        if sys.platform == "darwin":
+            try:
+                subprocess.run(["pkill", "-f", "safaridriver"], check=False)
+                self.logger.info("Killed existing safaridriver processes.")
+            except Exception as e:
+                self.logger.warning(f"Could not kill existing safaridriver processes: {e}")
+
+    def _setup_safari(self) -> webdriver.Safari:
+        """Set up Safari WebDriver."""
+        self._kill_safaridriver()
+        safari_options = SafariOptions()
+        if self.config.HEADLESS_MODE:
+            self.logger.warning("Safari does not support headless mode. Running in normal mode.")
+        
+        service = SafariService()
+        driver = webdriver.Safari(service=service, options=safari_options)
+        return driver
+
+    def _setup_chrome(self) -> webdriver.Chrome:
+        """Set up Chrome WebDriver."""
+        chrome_options = ChromeOptions()
         if self.config.HEADLESS_MODE:
             chrome_options.add_argument("--headless")
         chrome_options.add_argument(f"user-agent={self.config.USER_AGENT}")
@@ -31,7 +66,7 @@ class AmazonScraper:
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option("useAutomationExtension", False)
         
-        service = Service(ChromeDriverManager().install())
+        service = ChromeService(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         return driver
@@ -191,3 +226,36 @@ class AmazonScraper:
         """Close the WebDriver."""
         if self.driver:
             self.driver.quit() 
+
+    def parse_query(self, user_query: str) -> Dict:
+        try:
+            response = openai.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a shopping query parser. "
+                            "Extract the search term, price range, and other preferences from the user's query. "
+                            "Respond ONLY with a valid JSON object in this format: "
+                            "{"
+                            "\"search_term\": string, "
+                            "\"filters\": {\"price_max\": number, \"price_min\": number, \"prime\": boolean}, "
+                            "\"preferences\": {\"min_rating\": number, \"min_reviews\": integer, \"features\": [string]}"
+                            "}"
+                        )
+                    },
+                    {"role": "user", "content": user_query}
+                ],
+            )
+            content = response.choices[0].message.content
+            self.logger.info(f"Parsed query data: {content}")
+            import json
+            try:
+                parsed_data = json.loads(content)
+            except Exception:
+                parsed_data = {"raw": content}
+            return parsed_data
+        except Exception as e:
+            self.logger.error(f"Error parsing query: {str(e)}")
+            raise 
