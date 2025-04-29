@@ -1,74 +1,59 @@
-# Amazon Shopping Assistant Agent
+# Amazon Shopping Assistant Agent (LangGraph Edition)
 
-An autonomous agent that helps users shop on Amazon using natural language processing and web automation.
+An autonomous agent that helps users shop on Amazon using natural language processing, web automation, and a modern graph-based workflow with [LangGraph](https://github.com/langchain-ai/langgraph).
 
 ## Features
 
 - Natural language processing for shopping requests
-- Amazon interface navigation
+- Amazon interface navigation (auto-detects Safari on Mac, Chrome elsewhere)
 - Product information extraction and comparison
 - Smart filtering based on user preferences
-- Interactive follow-up and refinement capabilities
+- Interactive, modular, and extensible agent workflow using LangGraph
 
 ## Technical Approach
 
-- **Web Automation**: Using Selenium WebDriver for reliable Amazon interface interaction
-- **NLP**: Leveraging OpenAI's GPT models for natural language understanding
-- **Data Processing**: Structured product information extraction and comparison
-- **Rate Limiting**: Implemented request throttling and human-like behavior patterns
+- **Web Automation**: Selenium WebDriver for Amazon interaction
+- **NLP**: OpenAI GPT models for natural language understanding
+- **Agent Orchestration**: [LangGraph](https://github.com/langchain-ai/langgraph) for multi-step, stateful workflows
+- **Rate Limiting**: Human-like request throttling
 
 ## Setup
 
 1. Clone the repository:
-```bash
-git clone https://github.com/tuanyuan2008/amazon-shopping-assistant.git
-cd amazon-shopping-assistant
-```
+   ```bash
+   git clone <repository-url>
+   cd amazon-shopping-assistant
+   ```
 
 2. Run the setup script to create a virtual environment and install dependencies:
-```bash
-./setup.sh
-```
-
-3. Choose one of the following methods for auto-activating the virtual environment:
-
-   a. Using direnv (recommended):
    ```bash
-   # Install direnv if you haven't already
-   brew install direnv  # For macOS
-   # or
-   sudo apt-get install direnv  # For Ubuntu/Debian
-
-   # Add to your shell config (~/.bashrc or ~/.zshrc)
-   eval "$(direnv hook bash)"  # For bash
-   # or
-   eval "$(direnv hook zsh)"   # For zsh
-
-   # Allow the .envrc file
-   direnv allow
+   ./setup.sh
    ```
 
-   b. Using bash auto-activation:
+3. Activate the virtual environment:
    ```bash
-   # Add to your ~/.bashrc
-   source /path/to/amazon-shopping-assistant/.bashrc
+   source venv/bin/activate
    ```
 
-4. Edit the `.env` file with your API keys and configuration:
-```bash
-# Edit .env with your OpenAI API key and other settings
-```
+4. Edit the `.env` file with your OpenAI API key and configuration:
+   ```bash
+   # Edit .env with your OpenAI API key and other settings
+   ```
 
-5. Run the agent:
-```bash
-safaridriver --enable
-python main.py
-```
+5. (Mac users only) Enable Safari WebDriver:
+   ```bash
+   safaridriver --enable
+   ```
 
-To deactivate the virtual environment when you're done:
-```bash
-deactivate
-```
+6. Run the LangGraph agent:
+   ```bash
+   python main_langgraph.py
+   ```
+
+## Usage
+
+- When prompted, enter your shopping request in natural language (e.g., "Find me a coffee maker under $100 with good reviews that's available for Prime shipping").
+- The agent will parse your query, search Amazon, rank products, and display the top results.
 
 ## Project Structure
 
@@ -77,16 +62,15 @@ amazon-shopping-assistant/
 ├── README.md
 ├── requirements.txt
 ├── setup.sh
-├── .envrc                  # direnv configuration
-├── .bashrc                 # bash auto-activation
+├── .envrc                  # direnv configuration (optional)
 ├── .env.example
-├── main.py
-├── venv/                  # Virtual environment directory
+├── main_langgraph.py       # Main entry point (LangGraph agent)
+├── venv/                   # Virtual environment directory
 ├── src/
 │   ├── __init__.py
-│   ├── agent.py
 │   ├── amazon_scraper.py
 │   ├── nlp_processor.py
+│   ├── langgraph_nodes.py  # Stateless node functions for LangGraph
 │   └── utils/
 │       ├── __init__.py
 │       ├── rate_limiter.py
@@ -98,7 +82,16 @@ amazon-shopping-assistant/
 
 ## Development Notes
 
-- Implemented rate limiting to avoid detection
-- Uses human-like behavior patterns for web interaction
-- Focuses on extracting relevant product information
-- Handles Amazon's dynamic interface changes 
+- Uses LangGraph for modular, stateful agent orchestration
+- Rate limiting and human-like behavior for web scraping
+- Focuses on extracting and ranking relevant product information
+- Handles Amazon's dynamic interface changes
+
+---
+
+**To run the agent, always use:**
+```bash
+python main_langgraph.py
+```
+
+If you have questions or want to extend the workflow, see the code in `src/langgraph_nodes.py` and `main_langgraph.py` for how to add new steps or tools. 

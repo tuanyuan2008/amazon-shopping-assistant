@@ -1,6 +1,3 @@
-from src.nlp_processor import NLPProcessor
-from src.amazon_scraper import AmazonScraper
-
 def parse_user_query(state: dict) -> dict:
     nlp = state["nlp_processor"]
     parsed = nlp.parse_query(state["user_input"])
