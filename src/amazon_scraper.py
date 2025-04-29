@@ -9,9 +9,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 import logging
+import platform
 from bs4 import BeautifulSoup
-import time
-import random
 import subprocess
 import sys
 
@@ -25,18 +24,23 @@ class AmazonScraper:
         self.logger = logging.getLogger(__name__)
         self.driver = self._setup_driver()
 
+    def _get_default_browser(self) -> str:
+        if platform.system() == "Darwin":
+            return "safari"
+        else:
+            return "chrome"
+
     def _setup_driver(self) -> webdriver.Remote:
         """Set up and configure the WebDriver, trying Safari first, then Chrome."""
+        browser = self._get_default_browser()
         try:
-            return self._setup_safari()
-        except Exception as e:
-            self.logger.warning(f"Failed to set up Safari: {str(e)}. Trying Chrome...")
-            try:
+            if browser == "safari":
+                return self._setup_safari()
+            else:
                 return self._setup_chrome()
-            except Exception as e:
-                self.logger.error(f"Failed to set up Chrome: {str(e)}")
-                raise RuntimeError("Could not set up either Safari or Chrome. Please make sure Safari's WebDriver is enabled by running 'safaridriver --enable' in terminal.")
-
+        except Exception as e:
+            self.logger.error(f"Failed to set up {browser}: {str(e)}")
+ 
     def _kill_safaridriver(self):
         if sys.platform == "darwin":
             try:
