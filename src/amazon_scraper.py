@@ -1,67 +1,61 @@
 from typing import Dict, List, Optional
+import logging
+import platform
+import subprocess
+import sys
+import re
+
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.webdriver.safari.service import Service as SafariService
+from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.safari.options import Options as SafariOptions
-from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.safari.service import Service as SafariService
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
-import logging
-import platform
 from bs4 import BeautifulSoup
-import subprocess
-import sys
 
 from .utils.rate_limiter import RateLimiter
 from .utils.config import Config
+
 
 class AmazonScraper:
     def __init__(self, rate_limiter: RateLimiter):
         self.config = Config()
         self.rate_limiter = rate_limiter
         self.logger = logging.getLogger(__name__)
-        self.driver = self._setup_driver()
+        self.driver = self._initialize_driver()
 
-    def _get_default_browser(self) -> str:
+    def _initialize_driver(self) -> webdriver.Remote:
+        """Initialize WebDriver based on OS, fallback to Chrome if Safari fails."""
         if platform.system() == "Darwin":
-            return "safari"
-        else:
-            return "chrome"
-
-    def _setup_driver(self) -> webdriver.Remote:
-        """Set up and configure the WebDriver, trying Safari first, then Chrome."""
-        browser = self._get_default_browser()
-        try:
-            if browser == "safari":
+            try:
+                self.logger.info("Attempting to launch Safari WebDriver...")
                 return self._setup_safari()
-            else:
-                return self._setup_chrome()
-        except Exception as e:
-            self.logger.error(f"Failed to set up {browser}: {str(e)}")
- 
-    def _kill_safaridriver(self):
+            except Exception as e:
+                self.logger.warning(f"Safari WebDriver setup failed: {e}. Falling back to Chrome.")
+
+        self.logger.info("Launching Chrome WebDriver...")
+        return self._setup_chrome()
+
+    def _setup_safari(self) -> webdriver.Safari:
+        """Setup Safari driver."""
         if sys.platform == "darwin":
             try:
                 subprocess.run(["pkill", "-f", "safaridriver"], check=False)
-                self.logger.info("Killed existing safaridriver processes.")
             except Exception as e:
                 self.logger.warning(f"Could not kill existing safaridriver processes: {e}")
 
-    def _setup_safari(self) -> webdriver.Safari:
-        """Set up Safari WebDriver."""
-        self._kill_safaridriver()
         safari_options = SafariOptions()
         if self.config.HEADLESS_MODE:
             self.logger.warning("Safari does not support headless mode. Running in normal mode.")
-        
+
         service = SafariService()
-        driver = webdriver.Safari(service=service, options=safari_options)
-        return driver
+        return webdriver.Safari(service=service, options=safari_options)
 
     def _setup_chrome(self) -> webdriver.Chrome:
-        """Set up Chrome WebDriver."""
+        """Setup Chrome driver."""
         chrome_options = ChromeOptions()
         if self.config.HEADLESS_MODE:
             chrome_options.add_argument("--headless")
@@ -69,66 +63,47 @@ class AmazonScraper:
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option("useAutomationExtension", False)
-        
+
         service = ChromeService(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         return driver
 
     def search_products(self, query: str, filters: Dict) -> List[Dict]:
-        """
-        Search for products on Amazon with given query and filters.
-        
-        Args:
-            query (str): Search query
-            filters (Dict): Dictionary of filters to apply
-            
-        Returns:
-            List[Dict]: List of product information dictionaries
-        """
+        """Search Amazon for products based on query and filters."""
         try:
-            # Construct search URL with filters
             search_url = self._construct_search_url(query, filters)
-            self.logger.info(f"Searching with URL: {search_url}")
-            
-            # Navigate to search page
+            self.logger.info(f"Searching Amazon: {search_url}")
+
             self.driver.get(search_url)
             self.rate_limiter.wait()
-            
-            # Wait for results to load
+
             WebDriverWait(self.driver, 10).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "[data-component-type='s-search-result']"))
             )
-            
-            # Extract product information
-            products = self._extract_products()
-            return products
-            
+            return self._extract_products()
+
         except Exception as e:
-            self.logger.error(f"Error searching products: {str(e)}")
+            self.logger.error(f"Error during search: {e}")
             raise
 
     def _construct_search_url(self, query: str, filters: Dict) -> str:
-        """Construct Amazon search URL with query and filters."""
+        """Build search URL from query and filters."""
         base_url = self.config.AMAZON_BASE_URL
-        search_params = []
-        
-        # Add search query
-        search_params.append(f"k={query.replace(' ', '+')}")
-        
-        # Add filters
+        params = [f"k={query.replace(' ', '+')}"]
+
         if filters.get('price_max'):
-            search_params.append(f"rh=p_36%3A{filters['price_max']}00")
+            params.append(f"rh=p_36%3A{filters['price_max']}00")
         if filters.get('prime'):
-            search_params.append("rh=p_85%3A2470955011")
-            
-        return f"{base_url}/s?{'&'.join(search_params)}"
+            params.append("rh=p_85%3A2470955011")
+
+        return f"{base_url}/s?{'&'.join(params)}"
 
     def _extract_products(self) -> List[Dict]:
-        """Extract product information from search results page."""
-        products = []
+        """Extract products from page."""
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-        
+        products = []
+
         for item in soup.select("[data-component-type='s-search-result']"):
             try:
                 product = {
@@ -138,33 +113,32 @@ class AmazonScraper:
                     'review_count': self._extract_review_count(item),
                     'prime': self._is_prime(item),
                     'url': self._extract_url(item),
-                    'image_url': self._extract_image_url(item)
+                    'image_url': self._extract_image_url(item),
+                    'unit_price': self._extract_inline_unit_price(item),
+                    'delivery_estimate': self._extract_inline_delivery_estimate(item),
                 }
                 products.append(product)
             except Exception as e:
-                self.logger.warning(f"Error extracting product: {str(e)}")
+                self.logger.warning(f"Error extracting a product: {e}")
                 continue
-                
+
         return products
 
     def _extract_text(self, element, selector: str) -> Optional[str]:
-        """Extract text from an element using CSS selector."""
         try:
             return element.select_one(selector).text.strip()
         except:
             return None
 
     def _extract_price(self, element) -> Optional[float]:
-        """Extract price from product element."""
         try:
-            price_text = element.select_one("span.a-price-whole").text
-            price_cents = element.select_one("span.a-price-fraction").text
-            return float(f"{price_text}{price_cents}")
+            whole = element.select_one("span.a-price-whole").text
+            fraction = element.select_one("span.a-price-fraction").text
+            return float(f"{whole}{fraction}")
         except:
             return None
 
     def _extract_rating(self, element) -> Optional[float]:
-        """Extract rating from product element."""
         try:
             rating_text = element.select_one("span.a-icon-alt").text
             return float(rating_text.split()[0])
@@ -172,94 +146,67 @@ class AmazonScraper:
             return None
 
     def _extract_review_count(self, element) -> Optional[int]:
-        """Extract review count from product element."""
         try:
             count_text = element.select_one("span.a-size-base").text
             return int(count_text.replace(',', ''))
         except:
             return None
+        
+    def _extract_inline_delivery_estimate(self, element) -> Optional[str]:
+        try:
+            text = element.get_text(separator=" ", strip=True)
+            match = re.search(r"(Get it [^\.]+|Arrives [^\.]+|FREE delivery [^\.]+)", text)
+            if match:
+                return match.group(1)
+        except Exception as e:
+            self.logger.warning(f"Inline delivery estimate error: {e}")
+        return None
+
+
+    def _extract_inline_unit_price(self, element) -> Optional[str]:
+        try:
+            text = element.get_text(separator=" ", strip=True)
+            match = re.search(r"\$([\d\.]+)\s*/\s*(\w+)", text)
+            if match:
+                return f"${match.group(1)} per {match.group(2)}"
+        except Exception as e:
+            self.logger.warning(f"Inline unit price parsing error: {e}")
+        return None
 
     def _is_prime(self, element) -> bool:
-        """Check if product is Prime eligible."""
         return bool(element.select_one("i.a-icon-prime"))
 
     def _extract_url(self, element) -> Optional[str]:
-        """Extract product URL from element."""
         try:
-            return self.config.AMAZON_BASE_URL + element.select_one("a.a-link-normal")['href']
+            href = element.select_one("a.a-link-normal")['href']
+            return self.config.AMAZON_BASE_URL + href
         except:
             return None
 
     def _extract_image_url(self, element) -> Optional[str]:
-        """Extract product image URL from element."""
         try:
             return element.select_one("img.s-image")['src']
         except:
             return None
 
     def refine_search(self, previous_products: List[Dict], refinements: Dict) -> List[Dict]:
-        """
-        Refine previous search results based on new criteria.
-        
-        Args:
-            previous_products (List[Dict]): Previous search results
-            refinements (Dict): New filters and criteria
-            
-        Returns:
-            List[Dict]: Refined product list
-        """
-        # Apply refinements to existing products
-        refined_products = []
-        for product in previous_products:
-            if self._matches_refinements(product, refinements):
-                refined_products.append(product)
-                
-        return refined_products
+        """Refine products based on new filters."""
+        return [
+            product for product in previous_products
+            if self._matches_refinements(product, refinements)
+        ]
 
     def _matches_refinements(self, product: Dict, refinements: Dict) -> bool:
-        """Check if product matches refinement criteria."""
-        if refinements.get('price_max') and product['price'] > refinements['price_max']:
+        """Check if a product matches given refinement filters."""
+        if refinements.get('price_max') and product.get('price', 0) > refinements['price_max']:
             return False
-        if refinements.get('min_rating') and product['rating'] < refinements['min_rating']:
+        if refinements.get('min_rating') and product.get('rating', 0) < refinements['min_rating']:
             return False
-        if refinements.get('prime_only') and not product['prime']:
+        if refinements.get('prime_only') and not product.get('prime', False):
             return False
         return True
 
     def close(self):
-        """Close the WebDriver."""
+        """Cleanly close WebDriver."""
         if self.driver:
-            self.driver.quit() 
-
-    def parse_query(self, user_query: str) -> Dict:
-        try:
-            response = openai.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are a shopping query parser. "
-                            "Extract the search term, price range, and other preferences from the user's query. "
-                            "Respond ONLY with a valid JSON object in this format: "
-                            "{"
-                            "\"search_term\": string, "
-                            "\"filters\": {\"price_max\": number, \"price_min\": number, \"prime\": boolean}, "
-                            "\"preferences\": {\"min_rating\": number, \"min_reviews\": integer, \"features\": [string]}"
-                            "}"
-                        )
-                    },
-                    {"role": "user", "content": user_query}
-                ],
-            )
-            content = response.choices[0].message.content
-            self.logger.info(f"Parsed query data: {content}")
-            import json
-            try:
-                parsed_data = json.loads(content)
-            except Exception:
-                parsed_data = {"raw": content}
-            return parsed_data
-        except Exception as e:
-            self.logger.error(f"Error parsing query: {str(e)}")
-            raise 
+            self.driver.quit()
