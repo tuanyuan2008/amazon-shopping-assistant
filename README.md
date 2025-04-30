@@ -1,4 +1,4 @@
-# Amazon Shopping Assistant Agent (LangGraph Edition)
+# Amazon Shopping Assistant Agent
 
 An autonomous agent that helps users shop on Amazon using natural language processing, web automation, and a modern graph-based workflow with [LangGraph](https://github.com/langchain-ai/langgraph).
 
@@ -25,29 +25,41 @@ An autonomous agent that helps users shop on Amazon using natural language proce
    cd amazon-shopping-assistant
    ```
 
-2. Run the setup script to create a virtual environment and install dependencies:
+2. Install Rust (required for pydantic-core):
+   ```bash
+   # Install Rust
+   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+   
+   # Add Rust to your PATH
+   source "$HOME/.cargo/env"
+   
+   # Verify installation
+   rustc --version
+   ```
+
+3. Run the setup script to create a virtual environment and install dependencies:
    ```bash
    ./setup.sh
    ```
 
-3. Activate the virtual environment:
+4. Activate the virtual environment:
    ```bash
    source venv/bin/activate
    ```
 
-4. Edit the `.env` file with your OpenAI API key and configuration:
+5. Edit the `.env` file with your OpenAI API key and configuration:
    ```bash
    # Edit .env with your OpenAI API key and other settings
    ```
 
-5. (Mac users only) Enable Safari WebDriver:
+6. (Mac users only) Enable Safari WebDriver:
    ```bash
    safaridriver --enable
    ```
 
-6. Run the LangGraph agent:
+7. Run the agent:
    ```bash
-   python main_langgraph.py
+   python main.py
    ```
 
 ## Usage
@@ -62,22 +74,23 @@ amazon-shopping-assistant/
 ├── README.md
 ├── requirements.txt
 ├── setup.sh
-├── .envrc                  # direnv configuration (optional)
+├── .envrc                  # direnv configuration
 ├── .env.example
-├── main_langgraph.py       # Main entry point (LangGraph agent)
+├── .env                    # environment variables
+├── main.py                 # Main entry point (LangGraph workflow)
 ├── venv/                   # Virtual environment directory
 ├── src/
 │   ├── __init__.py
 │   ├── amazon_scraper.py
 │   ├── nlp_processor.py
 │   ├── langgraph_nodes.py  # Stateless node functions for LangGraph
+│   ├── models.py           # Pydantic models for data validation
 │   └── utils/
 │       ├── __init__.py
 │       ├── rate_limiter.py
 │       └── config.py
 └── tests/
-    ├── __init__.py
-    └── test_agent.py
+    └── __init__.py
 ```
 
 ## Development Notes
@@ -91,7 +104,7 @@ amazon-shopping-assistant/
 
 **To run the agent, always use:**
 ```bash
-python main_langgraph.py
+python main.py
 ```
 
-If you have questions or want to extend the workflow, see the code in `src/langgraph_nodes.py` and `main_langgraph.py` for how to add new steps or tools. 
+If you have questions or want to extend the workflow, see the code in `src/langgraph_nodes.py` and `main.py` for how to add new steps or tools. 

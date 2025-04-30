@@ -1,7 +1,8 @@
+import re
 from typing import Dict, List, Optional
 import openai
 import logging
-import json
+import dateparser
 from .utils.config import Config
 from .models import ParsedQuery, ParsedFollowUp
 
@@ -49,6 +50,7 @@ class NLPProcessor:
                         "role": "system",
                         "content": (
                             "You are a shopping query parser. Extract structured information from natural language shopping requests. "
+                            "For features, identify specific product attributes, materials, brands, colors, sizes, and other distinguishing characteristics. "
                             "Respond ONLY with a valid JSON object in the following format:\n"
                             "{\n"
                             "  \"search_term\": string,                     // the core product name or keyword\n"
@@ -62,7 +64,7 @@ class NLPProcessor:
                             "  },\n"
                             "  \"preferences\": {\n"
                             "    \"min_reviews\": number,                  // optional, minimum number of reviews\n"
-                            "    \"features\": [string]                    // optional list of desired features\n"
+                            "    \"features\": [string]                    // list of desired features (brands, materials, colors, sizes, etc.)\n"
                             "  }\n"
                             "}"
                         )
@@ -98,6 +100,12 @@ class NLPProcessor:
     def parse_follow_up(self, follow_up_query: str, previous_context: Dict) -> Dict:
         """
         Parse a follow-up query in the context of previous search results.
+        
+        Note: Features are intentionally not included in follow-up parsing because:
+        - The initial query (parse_query) already extracts all desired product features
+        - Follow-ups are for refining search criteria (price, rating, delivery, etc.), not adding new features
+        - If a user wants different features, they should start a new search rather than modifying the existing one
+        - This keeps product scoring consistent throughout the conversation using the original feature set
 
         Args:
             follow_up_query (str): Follow-up question or refinement
@@ -121,9 +129,11 @@ class NLPProcessor:
                             "    \"price_min\": number,\n"
                             "    \"min_rating\": number,\n"
                             "    \"prime\": boolean,\n"
-                            "    \"features\": [string],\n"
                             "    \"sort_by\": string,\n"
                             "    \"deliver_by\": string\n"
+                            "  },\n"
+                            "  \"preferences\": {\n"
+                            "    \"min_reviews\": number                  // optional, minimum number of reviews\n"
                             "  },\n"
                             "  \"comparison\": boolean\n"
                             "}"
@@ -152,6 +162,7 @@ class NLPProcessor:
             self.logger.error(f"Error parsing follow-up: {e}")
             return {
                 "filters": {},
+                "preferences": {},
                 "comparison": False
             }
 
@@ -185,16 +196,30 @@ class NLPProcessor:
             raise
 
     def _calculate_product_score(self, product: Dict, preferences: Dict) -> tuple[float, str]:
-        """Calculate a score for a product based on preferences and return explanation."""
+        """Calculate a score for a product based on preferences and product information."""
         score = 0.0
         explanations = []
+        
+        # Fixed weights for different scoring components
+        weights = {
+            'preference_match': 0.3,  # Feature matching is important
+            'price': 0.3,            # Price is equally important
+            'rating': 0.2,           # Rating is important but not critical
+            'reviews': 0.1,          # Review count is a nice to have
+            'delivery': 0.1          # Delivery timing is a nice to have
+        }
+        
+        # Preference matching using Jaccard similarity
+        preference_score = self._calculate_preference_similarity(product, preferences)
+        score += preference_score * weights['preference_match']
+        explanations.append(f"Preference match score: {preference_score:.2f}")
         
         # Price scoring (lower is better)
         if product.get('price') and preferences.get('price_max'):
             try:
                 price = float(product['price'].replace('$', '').replace(',', ''))
                 price_ratio = min(price / preferences['price_max'], 1.0)
-                price_score = (1 - price_ratio) * 0.3
+                price_score = (1 - price_ratio) * weights['price']
                 score += price_score
                 explanations.append(f"Price score: {price_score:.2f} (${price} vs max ${preferences['price_max']})")
             except (ValueError, TypeError):
@@ -206,13 +231,13 @@ class NLPProcessor:
                 rating = float(product['rating'].split(' ')[0])
                 if preferences.get('min_rating'):
                     if rating >= preferences['min_rating']:
-                        rating_score = (rating / 5) * 0.4
+                        rating_score = (rating / 5) * weights['rating']
                         score += rating_score
                         explanations.append(f"Rating score: {rating_score:.2f} ({rating}/5 stars, meets minimum {preferences['min_rating']})")
                     else:
                         explanations.append(f"Rating score: 0 (rating {rating}/5 below minimum {preferences['min_rating']})")
                 else:
-                    rating_score = (rating / 5) * 0.4
+                    rating_score = (rating / 5) * weights['rating']
                     score += rating_score
                     explanations.append(f"Rating score: {rating_score:.2f} ({rating}/5 stars)")
             except (ValueError, TypeError):
@@ -222,19 +247,74 @@ class NLPProcessor:
         if product.get('review_count'):
             try:
                 review_count = int(product['review_count'].replace(',', ''))
-                review_score = min(review_count / 1000, 1.0) * 0.2
+                review_score = min(review_count / 1000, 1.0) * weights['reviews']
                 score += review_score
                 explanations.append(f"Review count score: {review_score:.2f} ({review_count} reviews)")
             except (ValueError, TypeError):
                 explanations.append("Review count score: 0 (no reviews)")
         
-        # Prime bonus
-        if product.get('prime'):
-            score += 0.1
-            explanations.append("Prime bonus: +0.10")
+        # Delivery time scoring using AmazonScraper's normalization
+        if product.get('delivery_estimate'):
+            delivery_score = self._calculate_delivery_score(product['delivery_estimate'], preferences)
+            score += delivery_score * weights['delivery']
+            explanations.append(f"Delivery score: {delivery_score:.2f}")
         
         # Combine all explanations
         explanation = "\n".join(explanations)
         explanation += f"\nTotal score: {score:.2f}"
         
-        return score, explanation 
+        return score, explanation
+
+    def _calculate_preference_similarity(self, product: Dict, preferences: Dict) -> float:
+        """Calculate Jaccard similarity between product title tokens and preference features."""
+        try:
+            # Tokenize product title
+            title = product.get('title', '')
+            product_features = set(re.findall(r'\w+', title.lower()))
+
+            # Tokenize preference features
+            preference_features = set()
+            if preferences.get('features'):
+                for feature in preferences['features']:
+                    preference_features.update(re.findall(r'\w+', feature.lower()))
+
+            if not preference_features:
+                self.logger.debug("No user preference features provided.")
+                return 0.0
+
+            if not product_features:
+                self.logger.debug("No product features extracted.")
+                return 0.0
+
+            intersection = product_features & preference_features
+            union = product_features | preference_features
+            return len(intersection) / len(union) if union else 0.0
+
+        except Exception as e:
+            self.logger.warning(f"Error calculating preference similarity: {e}")
+            return 0.0
+
+    def _calculate_delivery_score(self, delivery_estimate: str, preferences: Dict) -> float:
+        """Score based on whether delivery meets the user's deadline."""
+        try:
+            deliver_by = preferences.get('deliver_by', '')
+            if not deliver_by or not delivery_estimate:
+                return 0.0
+
+            target_date = dateparser.parse(deliver_by)
+            actual_date = dateparser.parse(delivery_estimate)
+
+            if not target_date or not actual_date:
+                self.logger.debug(f"Could not parse delivery dates: target='{deliver_by}', estimate='{delivery_estimate}'")
+                return 0.0
+
+            if actual_date <= target_date:
+                return 1.0
+
+            # Partial score: inversely proportional to how late it is
+            days_late = (actual_date - target_date).days
+            return max(0.0, 1.0 / (days_late + 1))
+
+        except Exception as e:
+            self.logger.warning(f"Error calculating delivery score: {e}")
+            return 0.0
