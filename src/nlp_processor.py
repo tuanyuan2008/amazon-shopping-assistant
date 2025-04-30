@@ -10,52 +10,95 @@ class NLPProcessor:
         openai.api_key = self.config.OPENAI_API_KEY
         self.logger = logging.getLogger(__name__)
 
+    def resolve_deliver_by(user_phrase: str) -> Optional[str]:
+        """
+        Uses ChatGPT to normalize delivery requests like 'before Mother's Day' or 'by Friday'
+        into: 'today', 'tomorrow', 'in 2 days', or a concrete date like 'May 11'.
+        """
+        prompt = (
+            "You are a delivery date normalizer. Convert the user's delivery timing request "
+            "into a normalized delivery constraint. Only respond with:\n"
+            "- 'today'\n"
+            "- 'tomorrow'\n"
+            "- 'in N days'\n"
+            "- A date like 'May 11'\n"
+            "- A holiday name (e.g. 'Mother's Day') if relevant\n\n"
+            f"User input: {user_phrase}"
+        )
+
+        response = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "system", "content": prompt}],
+            temperature=0
+        )
+
+        return response.choices[0].message.content.strip().lower()
+
+
     def parse_query(self, user_query: str) -> Dict:
         """
-        Parse a natural language shopping query into structured data.
-        
-        Args:
-            user_query (str): Natural language shopping request
-            
-        Returns:
-            Dict: Structured query information
+        Parse a shopping query into structured filters and preferences.
         """
         try:
             response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": (
-                        "You are a shopping query parser. "
-                        "Extract the search term, price range, and other preferences from the user's query. "
-                        "Respond ONLY with a valid JSON object in this format: "
-                        "{"
-                        "\"search_term\": string, "
-                        "\"filters\": {\"price_max\": number, \"price_min\": number, \"prime\": boolean}, "
-                        "\"preferences\": {\"min_rating\": number, \"min_reviews\": integer, \"features\": [string]}"
-                        "}"
-                    )},
-                    {"role": "user", "content": user_query}
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a shopping query parser. Extract structured information from natural language shopping requests. "
+                            "Respond ONLY with a valid JSON object in the following format:\n"
+                            "{\n"
+                            "  \"search_term\": string,                     // the core product name or keyword\n"
+                            "  \"filters\": {\n"
+                            "    \"price_max\": number,                    // optional, max price\n"
+                            "    \"price_min\": number,                    // optional, min price\n"
+                            "    \"prime\": boolean,                       // whether the user requested Prime shipping\n"
+                            "    \"min_rating\": number,                   // optional, minimum acceptable rating (e.g. 4.0)\n"
+                            "    \"sort_by\": string,                      // one of: 'price-asc-rank', 'price-desc-rank', 'review-rank', 'date-desc-rank', 'relevanceblender'\n"
+                            "    \"deliver_by\": string                    // optional, one of: 'today', 'tomorrow', 'in 2 days'\n"
+                            "  },\n"
+                            "  \"preferences\": {\n"
+                            "    \"min_reviews\": number,                  // optional, minimum number of reviews\n"
+                            "    \"features\": [string]                    // optional list of desired features\n"
+                            "  }\n"
+                            "}"
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": user_query
+                    }
                 ],
+                temperature=0
             )
+
             content = response.choices[0].message.content
             self.logger.info(f"Parsed query data: {content}")
             try:
                 parsed_data = json.loads(content)
+
+                filters = parsed_data.get("filters", {})
+                if "deliver_by" in filters:
+                    filters["deliver_by"] = self.resolve_deliver_by(filters["deliver_by"])
+
             except Exception:
                 parsed_data = {"raw": content}
             return parsed_data
+
         except Exception as e:
             self.logger.error(f"Error parsing query: {str(e)}")
             raise
 
+
     def parse_follow_up(self, follow_up_query: str, previous_context: Dict) -> Dict:
         """
         Parse a follow-up query in the context of previous search results.
-        
+
         Args:
             follow_up_query (str): Follow-up question or refinement
             previous_context (Dict): Context from previous interaction
-            
+
         Returns:
             Dict: Structured refinement information
         """
@@ -63,23 +106,50 @@ class NLPProcessor:
             response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are a shopping query parser. Analyze the follow-up query in the context of previous search results. Respond ONLY with a valid JSON object in this format: {"
-                    "\"refinements\": {\"price_max\": number, \"price_min\": number, \"min_rating\": number, \"prime_only\": boolean, \"features\": [string]}, "
-                    "\"comparison\": boolean"
-                    "}"},
-                    {"role": "user", "content": f"Previous search: {previous_context['query']}\nFollow-up: {follow_up_query}"}
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a shopping query parser. Analyze the follow-up query in the context of previous search results. "
+                            "Respond ONLY with a valid JSON object in the following format:\n"
+                            "{\n"
+                            "  \"refinements\": {\n"
+                            "    \"price_max\": number,                    // optional\n"
+                            "    \"price_min\": number,                    // optional\n"
+                            "    \"min_rating\": number,                   // optional\n"
+                            "    \"prime_only\": boolean,                  // optional\n"
+                            "    \"features\": [string],                   // optional\n"
+                            "    \"sort_by\": string,                      // optional, one of: 'price-asc-rank', 'price-desc-rank', 'review-rank', 'date-desc-rank', 'relevanceblender'\n"
+                            "    \"deliver_by\": string                    // optional, one of: 'today', 'tomorrow', 'in 2 days'\n"
+                            "  },\n"
+                            "  \"comparison\": boolean                     // true if the user wants to compare products\n"
+                            "}"
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Previous search: {previous_context.get('query', '')}\nFollow-up: {follow_up_query}"
+                    }
                 ],
+                temperature=0
             )
+
             content = response.choices[0].message.content
             self.logger.info(f"Parsed follow-up data: {content}")
             try:
                 parsed_data = json.loads(content)
+
+                filters = parsed_data.get("filters", {})
+                if "deliver_by" in filters:
+                    filters["deliver_by"] = self.resolve_deliver_by(filters["deliver_by"])
+
             except Exception:
                 parsed_data = {"raw": content}
             return parsed_data
+
         except Exception as e:
             self.logger.error(f"Error parsing follow-up: {str(e)}")
             raise
+
 
     def rank_products(self, products: List[Dict], preferences: Dict) -> List[Dict]:
         """
@@ -90,15 +160,16 @@ class NLPProcessor:
             preferences (Dict): User preferences for ranking
             
         Returns:
-            List[Dict]: Ranked list of products
+            List[Dict]: Ranked list of products with ranking explanations
         """
         try:
             scored_products = []
             for product in products:
-                score = self._calculate_product_score(product, preferences)
+                score, explanation = self._calculate_product_score(product, preferences)
                 scored_products.append({
                     **product,
-                    'score': score
+                    'score': score,
+                    'ranking_explanation': explanation
                 })
             
             ranked_products = sorted(scored_products, key=lambda x: x['score'], reverse=True)
@@ -108,29 +179,57 @@ class NLPProcessor:
             self.logger.error(f"Error ranking products: {str(e)}")
             raise
 
-    def _calculate_product_score(self, product: Dict, preferences: Dict) -> float:
-        """Calculate a score for a product based on preferences."""
+    def _calculate_product_score(self, product: Dict, preferences: Dict) -> tuple[float, str]:
+        """Calculate a score for a product based on preferences and return explanation."""
         score = 0.0
+        explanations = []
         
         # Price scoring (lower is better)
         if product.get('price') and preferences.get('price_max'):
-            price_ratio = min(product['price'] / preferences['price_max'], 1.0)
-            score += (1 - price_ratio) * 0.3
+            try:
+                price = float(product['price'].replace('$', '').replace(',', ''))
+                price_ratio = min(price / preferences['price_max'], 1.0)
+                price_score = (1 - price_ratio) * 0.3
+                score += price_score
+                explanations.append(f"Price score: {price_score:.2f} (${price} vs max ${preferences['price_max']})")
+            except (ValueError, TypeError):
+                explanations.append("Price score: 0 (invalid price format)")
         
         # Rating scoring
         if product.get('rating'):
-            if preferences.get('min_rating'):
-                if product['rating'] >= preferences['min_rating']:
-                    score += (product['rating'] / 5) * 0.4
-            else:
-                score += (product['rating'] / 5) * 0.4
+            try:
+                rating = float(product['rating'].split(' ')[0])
+                if preferences.get('min_rating'):
+                    if rating >= preferences['min_rating']:
+                        rating_score = (rating / 5) * 0.4
+                        score += rating_score
+                        explanations.append(f"Rating score: {rating_score:.2f} ({rating}/5 stars, meets minimum {preferences['min_rating']})")
+                    else:
+                        explanations.append(f"Rating score: 0 (rating {rating}/5 below minimum {preferences['min_rating']})")
+                else:
+                    rating_score = (rating / 5) * 0.4
+                    score += rating_score
+                    explanations.append(f"Rating score: {rating_score:.2f} ({rating}/5 stars)")
+            except (ValueError, TypeError):
+                explanations.append("Rating score: 0 (invalid rating format)")
         
         # Review count scoring
         if product.get('review_count'):
-            score += min(product['review_count'] / 1000, 1.0) * 0.2
+            try:
+                review_count = int(product['review_count'].replace(',', ''))
+                review_score = min(review_count / 1000, 1.0) * 0.2
+                score += review_score
+                explanations.append(f"Review count score: {review_score:.2f} ({review_count} reviews)")
+            except (ValueError, TypeError):
+                explanations.append("Review count score: 0 (no reviews)")
         
         # Prime bonus
         if product.get('prime'):
             score += 0.1
+            explanations.append("Prime bonus: +0.10")
         
-        return score 
+        # Combine all explanations
+        explanation = "\n".join(explanations)
+        explanation += f"\nTotal score: {score:.2f}"
+        
+        return score, explanation 
