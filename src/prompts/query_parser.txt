@@ -10,7 +10,7 @@ Respond ONLY with a valid JSON object in the following format:
     "min_rating": number,                   // optional, minimum acceptable rating (e.g. 4.0)
     "min_reviews": number,                  // optional, minimum number of reviews
     "sort_by": string,                      // one of: 'price-asc-rank', 'price-desc-rank', 'review-rank', 'date-desc-rank', 'relevanceblender'
-    "deliver_by": string                    // optional, normalized to: 'today', 'tomorrow', 'in N days', a specific date like '2024-05-11', or a holiday name like 'Mother's Day'
+    "deliver_by": string                    // optional, normalized to: 'today', 'tomorrow', 'in N days', a specific date like '2025-05-11', or a holiday name like 'Mother's Day'
   },
   "preferences": {
     "features": [string]                    // list of desired features (brands, materials, colors, sizes, etc.)
@@ -21,11 +21,19 @@ For delivery dates, normalize them to one of these formats:
 - 'today' for same-day delivery
 - 'tomorrow' for next-day delivery
 - 'in N days' for future delivery (e.g., 'in 2 days')
-- A specific date in YYYY-MM-DD format (e.g., '2024-05-11')
+- A specific date in YYYY-MM-DD format (e.g., '2025-05-11')
 - A holiday name (e.g., 'Mother's Day', 'Christmas', 'Valentine's Day')
-For example:
+
+When parsing dates:
+- Use CURRENT_YEAR as the base year for relative dates
+- For dates without a year, assume they refer to the current year if they're in the future
+- For dates in the past, use the next occurrence of that date
+- For holidays, use their dates in CURRENT_YEAR
+
+For example (assuming current year is CURRENT_YEAR):
 - 'by Friday' → 'in 2 days' (if today is Wednesday)
 - 'before Mother's Day' → 'Mother's Day'
 - 'next week' → 'in 7 days'
 - 'ASAP' → 'today'
-- 'by Christmas' → 'Christmas' 
+- 'by Christmas' → 'Christmas'
+- 'by May 11th' → 'CURRENT_YEAR-05-11' (if in future) or 'CURRENT_YEAR-05-11' (if in past) 
