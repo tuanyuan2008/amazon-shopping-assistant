@@ -249,38 +249,6 @@ class AmazonScraper:
 
         return list(set(keywords))  # Deduplicate
 
-    def refine_search(self, products: List[Dict], refinements: Dict) -> List[Dict]:
-        """Filter product list based on follow-up refinements."""
-        return [
-            p for p in products
-            if self._matches_refinements(p, refinements)
-        ]
-
-    def _matches_refinements(self, product: Dict, refinements: Dict) -> bool:
-        try:
-            price = float(product.get("price", "0").replace("$", ""))
-            rating = float(product.get("rating", "0").split()[0])
-        except:
-            price = 0
-            rating = 0
-
-        if refinements.get("price_max") and price > refinements["price_max"]:
-            return False
-        if refinements.get("min_rating") and rating < refinements["min_rating"]:
-            return False
-        if refinements.get("prime_only") and not product.get("prime", False):
-            return False
-        
-        deliver_by = refinements.get("deliver_by")
-        delivery_text = product.get("delivery_estimate", "").lower()
-
-        if deliver_by:
-            delivery_keywords = self._normalize_delivery_keywords(deliver_by)
-            if not any(k in delivery_text for k in delivery_keywords):
-                return False
-
-        return True
-
     def close(self):
         """Shut down the WebDriver."""
         if self.driver:
