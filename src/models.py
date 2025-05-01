@@ -1,8 +1,9 @@
-from pydantic import BaseModel, Field, validator
-from typing import List, Optional, Literal
 from enum import Enum
+from typing import List, Optional
+from pydantic import BaseModel, Field
 
 class SortOption(str, Enum):
+    """Enumeration of available sorting options for product search results."""
     PRICE_ASC = "price-asc-rank"
     PRICE_DESC = "price-desc-rank"
     REVIEW = "review-rank"
@@ -12,7 +13,7 @@ class SortOption(str, Enum):
 class Feature(BaseModel):
     """A product feature with its category."""
     name: str
-    
+
 class Filters(BaseModel):
     """Filters for product search results."""
     price_max: Optional[float] = None
@@ -22,15 +23,6 @@ class Filters(BaseModel):
     min_reviews: Optional[int] = None
     sort_by: Optional[str] = None
     deliver_by: Optional[str] = None
-
-    @validator('deliver_by')
-    def validate_deliver_by(cls, v):
-        if v is None:
-            return v
-        valid_formats = ['today', 'tomorrow', 'in N days', 'YYYY-MM-DD', 'holiday name']
-        if not any(v.startswith(fmt) for fmt in valid_formats):
-            raise ValueError(f"deliver_by must be in one of these formats: {valid_formats}")
-        return v
 
 class Preferences(BaseModel):
     """User preferences for product ranking."""

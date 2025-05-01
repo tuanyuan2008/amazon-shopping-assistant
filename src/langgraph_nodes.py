@@ -11,7 +11,7 @@ def search_amazon(state: dict) -> dict:
     scraper = state["scraper"]
     products = scraper.search_products(
         query=state["parsed_query"]["search_term"],
-        filters=state["parsed_query"].get("filters", {})
+        filters=state["parsed_query"]["filters"],
     )
     return {
         **state,
@@ -21,9 +21,11 @@ def search_amazon(state: dict) -> dict:
 
 def rank_products(state: dict) -> dict:
     nlp = state["nlp_processor"]
+    parsed_query = state["parsed_query"]
     ranked = nlp.rank_products(
         products=state["products"],
-        preferences=state["parsed_query"].get("preferences", {})
+        filters=parsed_query["filters"],
+        preferences=parsed_query["preferences"]
     )
     return {
         **state,

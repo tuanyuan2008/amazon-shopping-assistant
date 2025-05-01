@@ -1,0 +1,9 @@
+When generating the search_term, incorporate relevant preferences and features to improve search results. 
+The search_term should be optimized for Amazon's search algorithm while maintaining the user's intent. 
+For example:
+- If user asks 'Show me laptops under $1000 with 4+ stars', search_term should be 'laptop' (price and rating go to filters)
+- If user asks 'Find me the cheapest wireless earbuds with Prime delivery', search_term should be 'wireless earbuds' (Prime and sorting go to filters)
+- If user asks 'I need a gaming laptop with 16GB RAM and RTX 3080', search_term should be 'gaming laptop RTX 3080 16GB RAM'
+- If user asks 'Show me organic coffee beans with at least 1000 reviews', search_term should be 'organic coffee beans' (review count goes to filters)
+- If user asks 'I need a waterproof phone case for iPhone 13 that can arrive tomorrow', search_term should be 'iPhone 13 waterproof case' (delivery goes to filters)
+The features list should contain all relevant attributes that can be used for filtering and scoring. 

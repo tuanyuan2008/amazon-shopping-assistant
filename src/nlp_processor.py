@@ -1,88 +1,107 @@
 import re
-from typing import Dict, List, Optional
-import openai
 import logging
+from datetime import datetime, date
+from pathlib import Path
+from typing import Dict, List, Optional
+import holidays
+import openai
 import dateparser
 from .utils.config import Config
 from .models import ParsedQuery
+
+class DateHandler:
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self.date_parser_settings = {
+            'PREFER_DATES_FROM': 'future',
+            'RELATIVE_BASE': datetime.now(),
+            'RETURN_AS_TIMEZONE_AWARE': False,
+            'SKIP_TOKENS': [],
+        }
+
+        self.config = Config()
+        openai.api_key = self.config.OPENAI_API_KEY
+        self.prompt_dir = Path(__file__).parent / 'prompts'
+
+    def _get_date_parser_prompt(self, year: int) -> str:
+        prompt_path = self.prompt_dir / 'date_parser.txt'
+        with open(prompt_path) as f:
+            return f.read().format(year=year)
+
+    def _parse_date_with_llm(self, date_str: str, year: int) -> Optional[date]:
+        try:
+            response = openai.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": self._get_date_parser_prompt(year)},
+                    {"role": "user", "content": date_str}
+                ],
+                temperature=0
+            )
+            result = response.choices[0].message.content.strip()
+            if result.lower() == 'none':
+                return None
+            return datetime.strptime(result, '%Y-%m-%d').date()
+        except Exception as e:
+            self.logger.warning(f"Error parsing date with GPT: {e}")
+            return None
+
+    def parse_date(self, date_input, use_gpt: bool = False) -> Optional[date]:
+        if not date_input:
+            return None
+
+        if isinstance(date_input, date):
+            return date_input
+        if isinstance(date_input, datetime):
+            return date_input.date()
+        if not isinstance(date_input, str):
+            self.logger.warning(f"Expected str/date input, got: {type(date_input)}")
+            return None
+
+        date_str = date_input.strip().lower()
+        current_year = datetime.now().year
+
+        # 1. Check built-in U.S. holidays
+        us_holidays = holidays.country_holidays("US", years=current_year)
+        for holiday_date, name in us_holidays.items():
+            if date_str in name.lower():
+                return holiday_date
+
+        # 2. Try parsing directly
+        parsed = dateparser.parse(date_str, settings=self.date_parser_settings)
+        if parsed:
+            return parsed.date()
+
+        # 3. Fallback to GPT if enabled
+        if use_gpt:
+            return self._parse_date_with_llm(date_str, current_year)
+        return None
 
 class NLPProcessor:
     def __init__(self):
         self.config = Config()
         openai.api_key = self.config.OPENAI_API_KEY
         self.logger = logging.getLogger(__name__)
+        self.date_handler = DateHandler()
+        self.prompt_dir = Path(__file__).parent / 'prompts'
 
     def _get_parser_prompt(self, is_follow_up: bool = False) -> str:
-        """
-        Get the appropriate system prompt for parsing queries.
-        """
-        base_prompt = (
-            "You are a shopping query parser. Extract structured information from natural language shopping requests. "
-            "For features, identify specific product attributes, materials, brands, colors, sizes, and other distinguishing characteristics. "
-            "Respond ONLY with a valid JSON object in the following format:\n"
-            "{\n"
-            "  \"search_term\": string,                     // the core product name or keyword, optimized with relevant preferences\n"
-            "  \"filters\": {\n"
-            "    \"price_max\": number,                    // optional, max price\n"
-            "    \"price_min\": number,                    // optional, min price\n"
-            "    \"prime\": boolean,                       // whether the user requested Prime shipping\n"
-            "    \"min_rating\": number,                   // optional, minimum acceptable rating (e.g. 4.0)\n"
-            "    \"min_reviews\": number,                  // optional, minimum number of reviews\n"
-            "    \"sort_by\": string,                      // one of: 'price-asc-rank', 'price-desc-rank', 'review-rank', 'date-desc-rank', 'relevanceblender'\n"
-            "    \"deliver_by\": string                    // optional, normalized to: 'today', 'tomorrow', 'in N days', a specific date like '2024-05-11', or a holiday name like 'Mother's Day'\n"
-            "  },\n"
-            "  \"preferences\": {\n"
-            "    \"features\": [string]                    // list of desired features (brands, materials, colors, sizes, etc.)\n"
-            "  }\n"
-            "}\n\n"
-            "For delivery dates, normalize them to one of these formats:\n"
-            "- 'today' for same-day delivery\n"
-            "- 'tomorrow' for next-day delivery\n"
-            "- 'in N days' for future delivery (e.g., 'in 2 days')\n"
-            "- A specific date in YYYY-MM-DD format (e.g., '2024-05-11')\n"
-            "- A holiday name (e.g., 'Mother's Day', 'Christmas', 'Valentine's Day')\n"
-            "For example:\n"
-            "- 'by Friday' → 'in 2 days' (if today is Wednesday)\n"
-            "- 'before Mother's Day' → 'Mother's Day'\n"
-            "- 'next week' → 'in 7 days'\n"
-            "- 'ASAP' → 'today'\n"
-            "- 'by Christmas' → 'Christmas'\n"
-        )
+        """Get the appropriate system prompt for parsing queries."""
+        base_prompt_path = self.prompt_dir / 'query_parser.txt'
+        with open(base_prompt_path) as f:
+            base_prompt = f.read()
 
         if is_follow_up:
-            return (
-                base_prompt +
-                "Analyze the follow-up query in the context of previous search results. "
-                "You can modify any aspect of the search, including:\n"
-                "- Adding or changing features (e.g., 'I want a black Nike backpack' after 'I want a bookbag')\n"
-                "- Adjusting filters (e.g., 'Show me cheaper options')\n"
-                "- Changing the search term (e.g., 'Actually, I want a messenger bag instead')\n"
-                "For example:\n"
-                "- If user asks 'Show me cheaper options', update price_max to the cheapest price found in the previous search\n"
-                "- If user asks 'Only show items with 4+ stars', update min_rating to 4\n"
-                "- If user asks 'I need it by tomorrow', update deliver_by to 'tomorrow'\n"
-                "- If user asks 'Sort by price', update sort_by to 'price-asc-rank'\n"
-                "- If user asks 'I want a black Nike backpack', update search_term and features\n"
-                "Remember: The follow-up can modify any aspect of the search, not just filters."
-            )
+            follow_up_path = self.prompt_dir / 'query_parser_follow_up.txt'
+            with open(follow_up_path) as f:
+                return base_prompt + f.read()
         else:
-            return (
-                base_prompt +
-                "When generating the search_term, incorporate relevant preferences and features to improve search results. "
-                "The search_term should be optimized for Amazon's search algorithm while maintaining the user's intent. "
-                "For example:\n"
-                "- If user asks 'Show me laptops under $1000 with 4+ stars', search_term should be 'laptop' (price and rating go to filters)\n"
-                "- If user asks 'Find me the cheapest wireless earbuds with Prime delivery', search_term should be 'wireless earbuds' (Prime and sorting go to filters)\n"
-                "- If user asks 'I need a gaming laptop with 16GB RAM and RTX 3080', search_term should be 'gaming laptop RTX 3080 16GB RAM'\n"
-                "- If user asks 'Show me organic coffee beans with at least 1000 reviews', search_term should be 'organic coffee beans' (review count goes to filters)\n"
-                "- If user asks 'I need a waterproof phone case for iPhone 13 that can arrive tomorrow', search_term should be 'iPhone 13 waterproof case' (delivery goes to filters)\n"
-                "The features list should contain all relevant attributes that can be used for filtering and scoring."
-            )
+            search_term_path = self.prompt_dir / 'query_parser_search_term.txt'
+            with open(search_term_path) as f:
+                return base_prompt + f.read()
 
     def _parse_with_llm(self, prompt: str, user_input: str, model_class) -> Dict:
-        """
-        Common method to parse queries using the LLM.
-        """
+        """Common method to parse queries using the LLM."""
         try:
             response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
@@ -104,16 +123,12 @@ class NLPProcessor:
             return {}
 
     def parse_query(self, user_query: str) -> Dict:
-        """
-        Parse a shopping query into structured filters and preferences.
-        """
+        """Parse a shopping query into structured filters and preferences."""
         prompt = self._get_parser_prompt(is_follow_up=False)
         return self._parse_with_llm(prompt, user_query, ParsedQuery)
 
     def parse_follow_up(self, follow_up_query: str, previous_context: Dict) -> Dict:
-        """
-        Parse a follow-up query in the context of previous search results.
-        """
+        """Parse a follow-up query in the context of previous search results."""
         prompt = self._get_parser_prompt(is_follow_up=True)
         user_input = f"Previous search: {previous_context.get('query', '')}\nFollow-up: {follow_up_query}"
         result = self._parse_with_llm(prompt, user_input, ParsedQuery)
@@ -121,21 +136,14 @@ class NLPProcessor:
             result["comparison"] = True  # Mark as comparison since it's a follow-up
         return result
 
-    def rank_products(self, products: List[Dict], preferences: Dict) -> List[Dict]:
+    def rank_products(self, products: List[Dict], filters: Dict, preferences: Dict) -> List[Dict]:
         """
-        Rank products based on user preferences and product information.
-        
-        Args:
-            products (List[Dict]): List of product information dictionaries
-            preferences (Dict): User preferences for ranking
-            
-        Returns:
-            List[Dict]: Ranked list of products with ranking explanations
+        Rank products based on user filters and preferences.
         """
         try:
             scored_products = []
             for product in products:
-                score, explanation = self._calculate_product_score(product, preferences)
+                score, explanation = self._calculate_product_score(product, filters, preferences)
                 scored_products.append({
                     **product,
                     'score': score,
@@ -149,8 +157,8 @@ class NLPProcessor:
             self.logger.error(f"Error ranking products: {str(e)}")
             raise
 
-    def _calculate_product_score(self, product: Dict, preferences: Dict) -> tuple[float, str]:
-        """Calculate a score for a product based on preferences and product information."""
+    def _calculate_product_score(self, product: Dict, filters: Dict, preferences: Dict) -> tuple[float, str]:
+        """Calculate a score for a product based on filters and preferences and product information."""
         score = 0.0
         explanations = []
         
@@ -169,16 +177,16 @@ class NLPProcessor:
         explanations.append(f"Preference match score: {preference_score:.2f}")
         
         # Price scoring (lower is better)
-        if product.get('price') and preferences.get('price_max'):
+        if product.get('price') and filters.get('price_max'):
             try:
                 price = float(product['price'].replace('$', '').replace(',', ''))
-                if price > preferences['price_max']:
-                    explanations.append(f"Price score: 0 (product price ${price} exceeds maximum price ${preferences['price_max']})")
+                if price > filters['price_max']:
+                    explanations.append(f"Price score: 0 (product price ${price} exceeds maximum price ${filters['price_max']})")
                 else:
-                    price_ratio = min(price / preferences['price_max'], 1.0)
+                    price_ratio = min(price / filters['price_max'], 1.0)
                     price_score = (1 - price_ratio) * weights['price']
                     score += price_score
-                    explanations.append(f"Price score: {price_score:.2f} (product price ${price} vs maximum price ${preferences['price_max']})")
+                    explanations.append(f"Price score: {price_score:.2f} (product price ${price} vs maximum price ${filters['price_max']})")
             except (ValueError, TypeError):
                 explanations.append("Price score: 0 (invalid price format)")
         
@@ -186,13 +194,13 @@ class NLPProcessor:
         if product.get('rating'):
             try:
                 rating = float(product['rating'].split(' ')[0])
-                if preferences.get('min_rating'):
-                    if rating < preferences['min_rating']:
-                        explanations.append(f"Rating score: 0 (rating {rating}/5 below minimum {preferences['min_rating']})")
+                if filters.get('min_rating'):
+                    if rating < filters['min_rating']:
+                        explanations.append(f"Rating score: 0 (rating {rating}/5 below minimum {filters['min_rating']})")
                     else:
                         rating_score = (rating / 5) * weights['rating']
                         score += rating_score
-                        explanations.append(f"Rating score: {rating_score:.2f} ({rating}/5 stars, meets minimum {preferences['min_rating']})")
+                        explanations.append(f"Rating score: {rating_score:.2f} ({rating}/5 stars, meets minimum {filters['min_rating']})")
                 else:
                     rating_score = (rating / 5) * weights['rating']
                     score += rating_score
@@ -204,13 +212,13 @@ class NLPProcessor:
         if product.get('review_count'):
             try:
                 review_count = int(product['review_count'].replace(',', ''))
-                if preferences.get('min_reviews'):
-                    if review_count < preferences['min_reviews']:
-                        explanations.append(f"Review count score: 0 ({review_count} reviews below minimum {preferences['min_reviews']})")
+                if filters.get('min_reviews'):
+                    if review_count < filters['min_reviews']:
+                        explanations.append(f"Review count score: 0 ({review_count} reviews below minimum {filters['min_reviews']})")
                     else:
                         review_score = min(review_count / 1000, 1.0) * weights['reviews']
                         score += review_score
-                        explanations.append(f"Review count score: {review_score:.2f} ({review_count} reviews, meets minimum {preferences['min_reviews']})")
+                        explanations.append(f"Review count score: {review_score:.2f} ({review_count} reviews, meets minimum {filters['min_reviews']})")
                 else:
                     review_score = min(review_count / 1000, 1.0) * weights['reviews']
                     score += review_score
@@ -218,14 +226,18 @@ class NLPProcessor:
             except (ValueError, TypeError):
                 explanations.append("Review count score: 0 (no reviews)")
         
-        # Delivery time scoring using AmazonScraper's normalization
-        if product.get('delivery_estimate'):
-            delivery_score = self._calculate_delivery_score(product['delivery_estimate'], preferences)
+        # Delivery time scoring
+        if product.get('delivery_estimate') and filters.get('deliver_by'):
+            delivery_score = self._calculate_delivery_score(product['delivery_estimate'], filters['deliver_by'])
             if delivery_score == 0:
-                explanations.append("Delivery score: 0 (does not meet delivery deadline)")
+                actual_date = self.date_handler.parse_date(product['delivery_estimate'])
+                target_date = self.date_handler.parse_date(filters['deliver_by'])
+                explanations.append(f"Delivery score: 0 ({actual_date} does not meet delivery deadline {target_date})")
             else:
                 score += delivery_score * weights['delivery']
                 explanations.append(f"Delivery score: {delivery_score:.2f}")
+        else:
+            explanations.append("Delivery score: 0 (no delivery estimate or delivery deadline)")
         
         # Combine all explanations
         explanation = "\n".join(explanations)
@@ -262,15 +274,14 @@ class NLPProcessor:
             self.logger.warning(f"Error calculating preference similarity: {e}")
             return 0.0
 
-    def _calculate_delivery_score(self, delivery_estimate: str, preferences: Dict) -> float:
+    def _calculate_delivery_score(self, delivery_estimate: str, deliver_by: str) -> float:
         """Score based on whether delivery meets the user's deadline."""
         try:
-            deliver_by = preferences.get('deliver_by', '')
             if not deliver_by or not delivery_estimate:
                 return 0.0
 
-            target_date = dateparser.parse(deliver_by)
-            actual_date = dateparser.parse(delivery_estimate)
+            target_date = self.date_handler.parse_date(deliver_by)
+            actual_date = self.date_handler.parse_date(delivery_estimate)
 
             if not target_date or not actual_date:
                 self.logger.debug(f"Could not parse delivery dates: target='{deliver_by}', estimate='{delivery_estimate}'")

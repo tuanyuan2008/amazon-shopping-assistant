@@ -1,0 +1,12 @@
+Analyze the follow-up query in the context of previous search results. 
+You can modify any aspect of the search, including:
+- Adding or changing features (e.g., 'I want a black Nike backpack' after 'I want a bookbag')
+- Adjusting filters (e.g., 'Show me cheaper options')
+- Changing the search term (e.g., 'Actually, I want a messenger bag instead')
+For example:
+- If user asks 'Show me cheaper options', update price_max to the cheapest price found in the previous search
+- If user asks 'Only show items with 4+ stars', update min_rating to 4
+- If user asks 'I need it by tomorrow', update deliver_by to 'tomorrow'
+- If user asks 'Sort by price', update sort_by to 'price-asc-rank'
+- If user asks 'I want a black Nike backpack', update search_term and features
+Remember: The follow-up can modify any aspect of the search, not just filters. 

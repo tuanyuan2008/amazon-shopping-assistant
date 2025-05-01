@@ -1,5 +1,6 @@
-from datetime import datetime, timedelta
+from datetime import date
 from typing import Dict, List, Optional
+import dateparser
 import logging
 import platform
 import subprocess
@@ -19,7 +20,6 @@ from bs4 import BeautifulSoup
 
 from .utils.rate_limiter import RateLimiter
 from .utils.config import Config
-
 
 class AmazonScraper:
     def __init__(self, rate_limiter: RateLimiter):
@@ -128,7 +128,7 @@ class AmazonScraper:
             try:
                 title = (
                     self._extract_text(item, "h2 a span") or
-                    self._extract_text(item, ".a-size-medium.a-color-base.a-text-normal") or
+                    self._extract_text(item, ".a-size-base-plus.a-color-base") or
                     "Title not available"
                 )
                 price = self._extract_price(item)
@@ -160,21 +160,15 @@ class AmazonScraper:
             return None
 
     def _extract_price(self, element) -> Optional[float]:
-        try:
-            whole = element.select_one("span.a-price-whole")
-            fraction = element.select_one("span.a-price-fraction")
-            if whole and fraction:
-                return float(f"{whole.text}{fraction.text}")
-            return None
-        except:
-            return None
+        whole = element.select_one("span.a-price-whole")
+        fraction = element.select_one("span.a-price-fraction")
+        if whole and fraction:
+            return float(f"{whole.text}{fraction.text}")
+        return None
 
     def _extract_rating(self, element) -> Optional[float]:
-        try:
-            rating_text = element.select_one("span.a-icon-alt")
-            return float(rating_text.text.split()[0]) if rating_text else None
-        except:
-            return None
+        rating_text = element.select_one("span.a-icon-alt")
+        return float(rating_text.text.split()[0]) if rating_text else None
 
     def _extract_review_count(self, element) -> Optional[int]:
         try:
@@ -183,13 +177,19 @@ class AmazonScraper:
         except:
             return None
 
-    def _extract_inline_delivery_estimate(self, element) -> Optional[str]:
+    def _extract_inline_delivery_estimate(self, element) -> Optional[date]:
+        """
+        Extract the earliest delivery date (as a date object) from a delivery estimate string in the element.
+        Handles phrases like 'Get it by...', 'Arrives...', 'FREE delivery...', etc.
+        """
         try:
             text = element.get_text(separator=" ", strip=True)
-            match = re.search(r"(Get it [^\.]+|Arrives [^\.]+|FREE delivery [^\.]+)", text)
-            return match.group(1) if match else None
+            # Extract all date-like phrases
+            date_matches = re.findall(r"(today|tomorrow|[A-Z][a-z]+ \d{1,2})", text, re.IGNORECASE)
+            parsed_dates = [dateparser.parse(d, settings={"PREFER_DATES_FROM": "future"}) for d in date_matches]
+            return min([d.date() for d in parsed_dates if d]) if parsed_dates else None
         except Exception as e:
-            self.logger.warning(f"Delivery estimate extraction failed: {e}")
+            self.logger.warning(f"Delivery date extraction failed: {e}")
             return None
 
     def _extract_inline_unit_price(self, element) -> Optional[str]:
@@ -205,49 +205,11 @@ class AmazonScraper:
         return bool(element.select_one("i.a-icon-prime"))
 
     def _extract_url(self, element) -> Optional[str]:
-        try:
-            href = element.select_one("a.a-link-normal")["href"]
-            return self.config.AMAZON_BASE_URL + href
-        except:
-            return None
+        href = element.select_one("a.a-link-normal")["href"]
+        return self.config.AMAZON_BASE_URL + href
 
     def _extract_image_url(self, element) -> Optional[str]:
-        try:
-            return element.select_one("img.s-image")["src"]
-        except:
-            return None
-        
-    def _normalize_delivery_keywords(self, deliver_by: str) -> List[str]:
-        """
-        Given a normalized delivery string like 'tomorrow', 'in 2 days', or 'May 11',
-        return a list of keywords to match against Amazon's delivery estimate text.
-        """
-        deliver_by = deliver_by.lower().strip()
-        keywords = [deliver_by]
-
-        try:
-            # Handle 'tomorrow'
-            if deliver_by == "tomorrow":
-                date = datetime.now() + timedelta(days=1)
-                keywords.append(date.strftime("%B %-d").lower())
-
-            # Handle 'today'
-            elif deliver_by == "today":
-                date = datetime.now()
-                keywords.append(date.strftime("%B %-d").lower())
-
-            # Handle relative format: 'in N days'
-            elif "in" in deliver_by and "day" in deliver_by:
-                num_days = int(deliver_by.split("in ")[1].split(" ")[0])
-                date = datetime.now() + timedelta(days=num_days)
-                keywords.append(date.strftime("%B %-d").lower())
-
-            # If it's already something like 'May 11', leave as is
-            # If it's a holiday like "mother's day", assume it's already usable
-        except Exception:
-            pass
-
-        return list(set(keywords))  # Deduplicate
+        return element.select_one("img.s-image")["src"]
 
     def close(self):
         """Shut down the WebDriver."""

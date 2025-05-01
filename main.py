@@ -16,7 +16,7 @@ class AssistantState(TypedDict, total=False):
 
 
 rate_limiter = RateLimiter(
-    max_requests_per_minute=30,
+    max_requests_per_minute=50,
     request_delay_min=2,
     request_delay_max=5
 )
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     print("\nTop Results:")
     for i, product in enumerate(result.get("ranked_products", [])[:5], 1):
         price_per_count = product.get("price_per_count", "N/A")
-        print(f"\n{i}. {product.get('title')} - ${product.get('price')} ( Unit Price: {price_per_count} ) - {product.get('url')}")
+        print(f"\n{i}. {product.get('title')} - ${product.get('price')} ( Unit Price: {price_per_count} ) \n\n {product.get('url')} \n\n")
         print("Ranking Explanation:")
         print(product.get('ranking_explanation', 'No ranking explanation available'))
         print("-" * 80)
