@@ -3,6 +3,7 @@ import logging
 import math
 from datetime import datetime, date
 from pathlib import Path
+from scipy.special import expit
 from scipy.stats import percentileofscore
 from typing import Dict, List, Optional
 import holidays
@@ -10,6 +11,8 @@ import openai
 import dateparser
 from .utils.config import Config
 from .models import ParsedQuery
+
+MISSING_SCORE = 0.15
 
 class DateHandler:
     def __init__(self):
@@ -155,83 +158,92 @@ class NLPProcessor:
         except ValueError:
             return None
 
-    def _calculate_product_score(self, product: Dict, filters: Dict, preferences: Dict, all_products: List[Dict]) -> tuple[float, str]:
-        weights = {'preference_match': 0.3, 'price': 0.3, 'rating': 0.2, 'reviews': 0.1, 'delivery': 0.1}
-        score, explanations = 0.0, []
+    def _calculate_product_score(
+        self, 
+        product: Dict, 
+        filters: Dict, 
+        preferences: Dict, 
+        all_products: List[Dict]
+    ) -> tuple[float, str]:
+        components = {
+            "preference": self._calculate_preference_score(product, preferences),
+            "price": self._calculate_price_score(product, filters, all_products),
+            "rating": self._calculate_rating_score(product, filters),
+            "reviews": self._calculate_review_score(product, filters),
+            "delivery": self._calculate_delivery_score(product, filters),
+        }
 
-        for method, weight in [
-            (self._calculate_preference_score, weights['preference_match']),
-            (lambda p, f: self._calculate_price_score(p, f, all_products), weights['price']),
-            (self._calculate_rating_score, weights['rating']),
-            (self._calculate_review_score, weights['reviews']),
-            (self._calculate_delivery_score, weights['delivery']),
-        ]:
-            if method == self._calculate_preference_score:
-                s, explanation = method(product, preferences)
-            else:
-                s, explanation = method(product, filters)
-            score += s * weight
-            explanations.append("- " + explanation)
+        score = 1.0
+        explanations = []
+        for name, (sub_score, explanation) in components.items():
+            explanations.append(f"- {explanation}")
+            if sub_score == 0.0:
+                score = 0.0
+                explanations[-1] = f"- {name.title()} score: 0 (excluded due to hard requirement)"
+                break
+            score *= sub_score
 
-        return score, "\n".join(explanations) + f"\nTotal score: {score:.2f}"
+        return score, "\n".join(explanations) + f"\nTotal score: {score:.4f}"
 
     def _calculate_preference_score(self, product: Dict, preferences: Dict) -> tuple[float, str]:
         product_tokens = set(re.findall(r'\w+', product.get('title', '').lower()))
         preference_tokens = set(re.findall(r'\w+', ' '.join(preferences.get('features', [])).lower()))
         if not preference_tokens or not product_tokens:
-            return 0.0, "Preference score: 0 (no tokens to compare)"
+            return MISSING_SCORE, "Preference score: 0 (no tokens to compare)"
         similarity = len(product_tokens & preference_tokens) / len(product_tokens | preference_tokens)
-        return similarity, f"Preference match score: {similarity:.2f}"
+        return similarity if similarity else MISSING_SCORE, f"Preference match score: {similarity:.2f}" # TODO: fix this
     
 
     def _get_unit_price_score(self, products: List[Dict], unit_price: float) -> float:
         prices = [p for p in (self._get_numeric_value(p.get('price_per_count', '')) for p in products) if p is not None]
         if not prices or unit_price is None:
-            return 0.0
+            return MISSING_SCORE
         percentile = percentileofscore(prices, unit_price, kind='rank')
         return (100 - percentile) / 100
 
     def _calculate_price_score(self, product: Dict, filters: Dict, all_products: List[Dict]) -> tuple[float, str]:
         price = self._get_numeric_value(product.get('price', ''))
-        unit_price = self._get_numeric_value(product.get('price_per_count', ''))
+        raw_price_per_count = product.get('price_per_count', '')
+        unit_price = self._get_numeric_value(raw_price_per_count)
         price_max = filters.get('price_max')
         
         if price is None:
-            return 0.0, "Price score: 0 (no price found for product)"
+            return MISSING_SCORE, f"Price score: {MISSING_SCORE} (no price found for product)"
         if price_max and price > price_max:
             return 0.0, f"Price score: 0 (price ${price} > max ${price_max})"
             
         score = self._get_unit_price_score(all_products, unit_price)
-        return score, f"Price score: {score:.2f} (unit price: ${unit_price if unit_price else 'N/A'})"
+        return score, f"Price score: {score:.2f} (unit price: {raw_price_per_count if raw_price_per_count else 'N/A'})"
 
     def _calculate_rating_score(self, product: Dict, filters: Dict) -> tuple[float, str]:
         try:
             rating = float(product.get('rating', '0').split(' ')[0])
         except ValueError:
-            return 0.0, "Rating score: 0 (no rating found for product)"
+            return MISSING_SCORE, f"Rating score: {MISSING_SCORE} (no rating found for product)"
         if filters.get('min_rating') and rating < filters['min_rating']:
             return 0.0, f"Rating score: 0 (rating {rating} < min {filters['min_rating']})"
-        rating_score = 1 / (1 + math.exp(-5 * (rating - 4.23)))
+        rating_score = expit(5 * (rating - 4.23))
         return rating_score, f"Rating score: {rating_score:.2f} ({rating}/5 stars)"
 
     def _calculate_review_score(self, product: Dict, filters: Dict) -> tuple[float, str]:
         count = self._get_numeric_value(product.get('review_count', ''))
         if count is None:
-            return 0.0, "Review count score: 0 (no reviews found for product)"
+            return MISSING_SCORE, f"Review count score: {MISSING_SCORE} (no reviews found for product)"
         if filters.get('min_reviews') and count < filters['min_reviews']:
             return 0.0, f"Review count score: 0 ({count} < min {filters['min_reviews']})"
-        score = min(1.0, math.log10(count + 1) / math.log10(5000))
+        score = math.log10(min(count, 5000) + 1) / math.log10(5000) # TODO: consider large user inputs here
         return score, f"Review count score: {score:.2f} ({int(count)} reviews)"
 
     def _calculate_delivery_score(self, product: Dict, filters: Dict) -> tuple[float, str]:
         target = self.date_handler.parse_date(filters.get('deliver_by'))
         actual = self.date_handler.parse_date(product.get('delivery_estimate'))
-        if not target:
-            return 0.0, "Delivery score: 0 (no desired delivery date specified)"
         if not actual:
-            return 0.0, "Delivery score: 0 (no delivery date found for product)"
-        if actual <= target:
-            return 1.0, f"Delivery score: 1.0 (arrives by {actual})"
-        days_late = (actual - target).days
-        score = max(0.0, 1.0 / (days_late + 1))
-        return score, f"Delivery score: {score:.2f} Actual delivery: {actual}, Target delivery: {target} ({days_late} days late)"
+            return MISSING_SCORE, f"Delivery score: {MISSING_SCORE} (no delivery date found for product)"
+        if target and target < actual:
+            days_late = (actual - target).days
+            score = max(0.0, 1.0 / (days_late + 1))
+            return score, f"Delivery score: {score:.2f} Actual delivery: {actual}, Target delivery: {target} ({days_late} days late)"
+        else:
+            days_until = (actual - datetime.now().date()).days
+            score = 1 - expit(1.5 * (days_until - 2))
+            return score, f"Delivery score: {score:.2f} (delivery date: {actual})"

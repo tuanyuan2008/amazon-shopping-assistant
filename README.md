@@ -25,16 +25,7 @@ An autonomous agent that helps users shop on Amazon using natural language proce
    cd amazon-shopping-assistant
    ```
 
-2. Install system dependencies:
-   ```bash
-   # Install required system packages
-   brew install gfortran openblas pkg-config
-   
-   # Install scipy using a pre-built wheel
-   pip install --only-binary :all: scipy
-   ```
-
-3. Install Rust (required for pydantic-core):
+2. Install Rust (required for pydantic-core):
    ```bash
    # Install Rust
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -46,9 +37,18 @@ An autonomous agent that helps users shop on Amazon using natural language proce
    rustc --version
    ```
 
-4. Run the setup script to create a virtual environment and install dependencies:
+3. Run the setup script to create a virtual environment and install dependencies:
    ```bash
    ./setup.sh
+   ```
+
+4. Install OpenBLAS and scipy:
+   ```bash
+   # Install OpenBLAS (required for scipy)
+   brew install openblas
+   
+   # Install scipy using pre-built wheel
+   pip install --only-binary :all: scipy
    ```
 
 5. Activate the virtual environment:
