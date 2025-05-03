@@ -172,7 +172,9 @@ class AmazonScraper:
 
     def _extract_review_count(self, element) -> Optional[int]:
         try:
-            count_text = element.select_one("span.a-size-base")
+            count_text = element.select_one("span.a-size-base.s-underline-text")
+            if not count_text:
+                count_text = element.select_one("span.a-size-base")
             return int(count_text.text.replace(',', '')) if count_text else None
         except:
             return None

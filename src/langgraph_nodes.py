@@ -1,6 +1,9 @@
 def parse_user_query(state: dict) -> dict:
     nlp = state["nlp_processor"]
-    parsed = nlp.parse_query(state["user_input"])
+    if state.get("previous_context"):
+        parsed = nlp.parse_follow_up(state["user_input"], state["previous_context"])
+    else:
+        parsed = nlp.parse_query(state["user_input"])
     return {
         **state,
         "parsed_query": parsed

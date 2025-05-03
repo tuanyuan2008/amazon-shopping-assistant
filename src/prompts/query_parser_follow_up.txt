@@ -6,6 +6,8 @@ Previous search context:
 - Previous preferences: {previous_context.get('preferences', {})}
 - Previous results: {previous_context.get('results', [])}
 
+IMPORTANT: Always preserve the original search term and product category unless explicitly changed by the user. For example, if the user was searching for "acne patches" and says "I want more reviews", keep "acne patches" in the search term and only modify the review count filter.
+
 Key Aspects to Consider:
 
 1. User Intent Analysis:
@@ -14,6 +16,7 @@ Key Aspects to Consider:
    - Is the user comparing specific products?
    - Is the user expressing dissatisfaction with previous results?
    - Is the user looking for similar but different options?
+   - Is the user modifying specific aspects (price, reviews, etc.) while keeping the same product type?
 
 2. Price Adjustments:
    - If user mentions price being too high/low:
@@ -44,14 +47,11 @@ Key Aspects to Consider:
      - Example: "ASAP" → set deliver_by to today
 
 5. Search Term Optimization:
-   - If user refines product description:
-     - Update search_term with more specific terms
-     - Add relevant product categories
-     - Include brand names if specified
-     - Consider successful terms from previous results
-     - Example: "looking for gaming laptops" → update search_term to include gaming
-     - Example: "specifically HP" → add "HP" to search_term
-     - Example: "wireless headphones" → update search_term to include wireless
+   - Only update search_term if user explicitly changes the product type or category
+   - Preserve the original search term for modifications to price, reviews, features, etc.
+   - Example: "I want more reviews" → keep original search term, only update min_reviews
+   - Example: "looking for a different brand" → keep original search term, add brand to preferences
+   - Example: "actually I want a different product" → update search_term to new product type
 
 6. Rating and Review Requirements:
    - If user mentions quality concerns:
@@ -61,6 +61,8 @@ Key Aspects to Consider:
      - Example: "better reviews" → increase min_rating to be higher than most of the recent results
      - Example: "more popular" → increase min_reviews to be more than most of the recent results
      - Example: "4 stars minimum" → set min_rating to 4
+     - Example: "I want more reviews" → set min_reviews to be significantly higher than the current results (e.g., if current results have 100 reviews, set min_reviews to 500)
+     - Example: "show me products with more reviews" → set min_reviews to be at least 2x the highest review count in current results
 
 7. Date Handling:
    - Use CURRENT_YEAR as the base year
@@ -72,13 +74,14 @@ Key Aspects to Consider:
      - If the holiday has passed, use CURRENT_YEAR + 1
 
 8. Context Preservation:
+   - ALWAYS preserve the original search term unless explicitly changed
    - Maintain relevant aspects from previous search
    - Only modify fields explicitly mentioned
    - Keep existing preferences unless changed
    - Consider successful aspects from previous results
-   - Example: If only price is mentioned, don't change rating filter
+   - Example: If only price is mentioned, don't change rating filter or search term
    - Example: If the user mentions new features, don't override existing
-   - Example: If delivery changed, keep other requirements
+   - Example: If delivery changed, keep other requirements and search term
 
 9. Comparison Mode:
    - Set comparison to true if:
@@ -97,16 +100,19 @@ Expected JSON Format:
     "filters": {
         "price_max": number,
         "price_min": number,
-        "prime_only": boolean,
+        "prime": boolean,
         "min_rating": number,
         "min_reviews": number,
-        "deliver_by": "YYYY-MM-DD"
+        "sort_by": string,
+        "deliver_by": string
     },
     "preferences": {
         "features": ["string"]
     },
     "comparison": boolean
 }
+
+IMPORTANT: The response must be valid JSON - do not include any comments or explanations in the JSON structure.
 
 Remember:
 - Only modify fields that are explicitly mentioned

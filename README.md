@@ -25,7 +25,16 @@ An autonomous agent that helps users shop on Amazon using natural language proce
    cd amazon-shopping-assistant
    ```
 
-2. Install Rust (required for pydantic-core):
+2. Install system dependencies:
+   ```bash
+   # Install required system packages
+   brew install gfortran openblas pkg-config
+   
+   # Install scipy using a pre-built wheel
+   pip install --only-binary :all: scipy
+   ```
+
+3. Install Rust (required for pydantic-core):
    ```bash
    # Install Rust
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -37,31 +46,26 @@ An autonomous agent that helps users shop on Amazon using natural language proce
    rustc --version
    ```
 
-3. Run the setup script to create a virtual environment and install dependencies:
+4. Run the setup script to create a virtual environment and install dependencies:
    ```bash
    ./setup.sh
    ```
 
-4. Activate the virtual environment:
+5. Activate the virtual environment:
    ```bash
    source venv/bin/activate
    ```
 
-5. Edit the `.env` file with your OpenAI API key and configuration:
+6. Edit the `.env` file with your OpenAI API key and configuration:
    ```bash
    # Edit .env with your OpenAI API key and other settings
    ```
 
-6. (Mac users only) Enable Safari WebDriver:
+7. (Mac users only) Enable Safari WebDriver:
    ```bash
    safaridriver --enable
    ```
-
-7. Run the agent:
-   ```bash
-   python main.py
-   ```
-
+   
 ## Usage
 
 - When prompted, enter your shopping request in natural language (e.g., "Find me a coffee maker under $100 with good reviews that's available for Prime shipping").
