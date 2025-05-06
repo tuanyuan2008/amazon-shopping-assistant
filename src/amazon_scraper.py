@@ -26,6 +26,13 @@ class AmazonScraper:
         self.config = Config()
         self.rate_limiter = rate_limiter
         self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.INFO)
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setLevel(logging.INFO)
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
         self.driver = self._initialize_driver()
 
     def _initialize_driver(self) -> webdriver.Remote:
@@ -123,14 +130,27 @@ class AmazonScraper:
         """Parse search results and return structured product info."""
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')
         results = []
+        self.logger.info(f"Found {len(soup.select('[data-component-type=\'s-search-result\']'))} search results")
 
         for item in soup.select("[data-component-type='s-search-result']"):
             try:
-                title = (
-                    self._extract_text(item, "h2 a span") or
-                    self._extract_text(item, ".a-size-base-plus.a-color-base") or
-                    "Title not available"
-                )
+                title = None
+                for selector in [
+                    "h2 a span",  # Standard product title
+                    ".a-size-base-plus.a-color-base",  # Alternative title format
+                    ".a-size-medium.a-color-base",  # Another common title format
+                    # "h2 .a-link-normal",  # Title in link
+                    # ".a-size-mini .a-link-normal"  # Small product title
+                ]:
+                    title = self._extract_text(item, selector)
+                    if title:
+                        # self.logger.info(f"Found title using selector '{selector}': {title}")
+                        break
+                
+                if not title:
+                    self.logger.warning(f"Could not extract title. Available text: {item.get_text()[:100]}")
+                    title = "Title not available"
+
                 price = self._extract_price(item)
                 rating = self._extract_rating(item)
                 review_count = self._extract_review_count(item)

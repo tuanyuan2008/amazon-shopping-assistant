@@ -13,3 +13,4 @@ langchain-openai>=0.1.6
 pydantic==2.11.1
 dateparser==1.2.1
 holidays==0.71
+nltk==3.8.1

@@ -3,16 +3,33 @@ import logging
 import math
 from datetime import datetime, date
 from pathlib import Path
+import ssl
+from typing import Dict, List, Optional
 from scipy.special import expit
 from scipy.stats import percentileofscore
 from typing import Dict, List, Optional
 import holidays
 import openai
 import dateparser
+import nltk
+from nltk.corpus import stopwords
 from .utils.config import Config
 from .models import ParsedQuery
 
 MISSING_SCORE = 0.15
+
+# Download required NLTK data with SSL verification disabled
+try:
+    _create_unverified_https_context = ssl._create_unverified_context
+except AttributeError:
+    pass
+else:
+    ssl._create_default_https_context = _create_unverified_https_context
+
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords', quiet=True)
 
 class DateHandler:
     def __init__(self):
@@ -87,6 +104,13 @@ class NLPProcessor:
         self.config = Config()
         openai.api_key = self.config.OPENAI_API_KEY
         self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.INFO)
+        if not self.logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setLevel(logging.INFO)
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+            handler.setFormatter(formatter)
+            self.logger.addHandler(handler)
         self.date_handler = DateHandler()
         self.prompt_dir = Path(__file__).parent / 'prompts'
 
@@ -148,16 +172,6 @@ class NLPProcessor:
             })
         return sorted(scored, key=lambda x: x["score"], reverse=True)
 
-    def _get_numeric_value(self, value: str) -> Optional[float]:
-        if not value:
-            return None
-        try:
-            if 'per' in value.lower():
-                return float(value.split('per')[0].replace('$', '').replace(',', '').strip())
-            return float(value.replace('$', '').replace(',', ''))
-        except ValueError:
-            return None
-
     def _calculate_product_score(
         self, 
         product: Dict, 
@@ -179,26 +193,52 @@ class NLPProcessor:
             explanations.append(f"- {explanation}")
             if sub_score == 0.0:
                 score = 0.0
-                explanations[-1] = f"- {name.title()} score: 0 (excluded due to hard requirement)"
+                explanations[-1] = f"- {name.title()} score: 0 (excluded due to missing hard requirement)"
                 break
             score *= sub_score
 
         return score, "\n".join(explanations) + f"\nTotal score: {score:.4f}"
+    
+    def _get_numeric_value(self, value: str) -> Optional[float]:
+        """Extract numeric value from price string, handling per-unit prices."""
+        if not value:
+            return None
+        try:
+            cleaned = value.replace('$', '').replace(',', '').strip()
+            if 'per' in cleaned.lower():
+                cleaned = cleaned.split('per')[0].strip()
+            return float(cleaned)
+        except (ValueError, IndexError):
+            return None
+    
+    def _filter_tokens(self, text: str) -> set:
+        """Filter tokens from text, keeping meaningful product specs."""
+        stop_words = set(stopwords.words('english'))
+        tokens = text.lower().split()
+        return {token for token in tokens if token not in stop_words and len(token) > 1}
 
     def _calculate_preference_score(self, product: Dict, preferences: Dict) -> tuple[float, str]:
-        product_tokens = set(re.findall(r'\w+', product.get('title', '').lower()))
+        product_tokens = self._filter_tokens(product.get('title', ''))
+        # NOTE: our preferences should be pre-filtered by the LLM
         preference_tokens = set(re.findall(r'\w+', ' '.join(preferences.get('features', [])).lower()))
-        if not preference_tokens or not product_tokens:
-            return MISSING_SCORE, "Preference score: 0 (no tokens to compare)"
-        similarity = len(product_tokens & preference_tokens) / len(product_tokens | preference_tokens)
-        return similarity if similarity else MISSING_SCORE, f"Preference match score: {similarity:.2f}" # TODO: fix this
-    
 
-    def _get_unit_price_score(self, products: List[Dict], unit_price: float) -> float:
-        prices = [p for p in (self._get_numeric_value(p.get('price_per_count', '')) for p in products) if p is not None]
-        if not prices or unit_price is None:
+        if not preference_tokens or not product_tokens:
+            return MISSING_SCORE, f"Preference score: {MISSING_SCORE} (no tokens to compare)"
+
+        matched_tokens = preference_tokens & product_tokens
+        missing_tokens = preference_tokens - product_tokens
+        match_percentage = len(matched_tokens) / len(preference_tokens)
+        
+        if missing_tokens:
+            return match_percentage, f"Preference score: {match_percentage:.2f} (matched {len(matched_tokens)}/{len(preference_tokens)} features, missing: {', '.join(missing_tokens)})"
+        return 1.0, f"Preference score: 1.0 (all {len(preference_tokens)} features matched)"
+
+    def _get_price_pct_score(self, products: List[Dict], price: float, is_unit_price: bool) -> float:
+        key = 'price_per_count' if is_unit_price else 'price'
+        prices = [p for p in (self._get_numeric_value(p.get(key, '')) for p in products) if p is not None]
+        if not prices or price is None:
             return MISSING_SCORE
-        percentile = percentileofscore(prices, unit_price, kind='rank')
+        percentile = percentileofscore(prices, price, kind='rank')
         return (100 - percentile) / 100
 
     def _calculate_price_score(self, product: Dict, filters: Dict, all_products: List[Dict]) -> tuple[float, str]:
@@ -212,8 +252,12 @@ class NLPProcessor:
         if price_max and price > price_max:
             return 0.0, f"Price score: 0 (price ${price} > max ${price_max})"
             
-        score = self._get_unit_price_score(all_products, unit_price)
-        return score, f"Price score: {score:.2f} (unit price: {raw_price_per_count if raw_price_per_count else 'N/A'})"
+        if unit_price is not None:
+            score = self._get_price_pct_score(all_products, unit_price, True)
+            return score, f"Price score: {score:.2f} (unit price: {raw_price_per_count})"
+        else:
+            score = self._get_price_pct_score(all_products, price, False)
+            return score, f"Price score: {score:.2f} (base price: ${price})"
 
     def _calculate_rating_score(self, product: Dict, filters: Dict) -> tuple[float, str]:
         try:
