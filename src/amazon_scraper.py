@@ -17,6 +17,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
+from selenium.common.exceptions import ElementClickInterceptedException
 
 from .utils.rate_limiter import RateLimiter
 from .utils.config import Config
@@ -74,7 +75,31 @@ class AmazonScraper:
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         return driver
 
-    def search_products(self, query: str, filters: Dict) -> List[Dict]:
+    def _get_page_results(self, page: int, first_url: Optional[str] = None) -> List[Dict]:
+        """Get results from the current page with retry logic."""
+        max_retries = 3
+        for attempt in range(max_retries):
+            # Wait for search results to load
+            WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "[data-component-type='s-search-result']"))
+            )
+            
+            page_results = self._extract_products()
+            
+            if not first_url or (page_results and page_results[0]['url'] != first_url):
+                return page_results
+                
+            if attempt < max_retries - 1:
+                self.logger.info(f"Detected duplicate results, retrying page {page} (attempt {attempt + 1}/{max_retries})")
+                self.driver.refresh()
+                self.rate_limiter.wait()
+            else:
+                self.logger.info("Max retries reached, stopping pagination")
+                return []
+        
+        return []
+
+    def search_products(self, query: str, filters: Dict, max_results: int = 100) -> List[Dict]:
         """Search Amazon for products using a keyword and filter dict."""
         try:
             url = self._construct_search_url(query, filters)
@@ -82,10 +107,49 @@ class AmazonScraper:
             self.driver.get(url)
             self.rate_limiter.wait()
 
-            WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "[data-component-type='s-search-result']"))
-            )
-            return self._extract_products()
+            results = []
+            first_url = None
+            page = 1
+
+            while len(results) < max_results:
+                page_results = self._get_page_results(page, first_url)
+                if not page_results:
+                    break
+                    
+                results.extend(page_results)
+                first_url = page_results[0]['url']
+                self.logger.info(f"Found {len(page_results)} products on page {page}, total: {len(results)}")
+                
+                if len(results) >= max_results:
+                    results = results[:max_results]
+                    break
+                    
+                try:
+                    next_button = WebDriverWait(self.driver, 10).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, "a.s-pagination-next"))
+                    )
+                    
+                    if "s-pagination-disabled" in next_button.get_attribute("class"):
+                        self.logger.info("Next button is disabled, stopping.")
+                        break
+
+                    self.driver.execute_script("arguments[0].scrollIntoView(true);", next_button)
+                    self.driver.execute_script("arguments[0].click();", next_button)
+
+                    WebDriverWait(self.driver, 10).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "[data-component-type='s-search-result']"))
+                    )
+                    page += 1
+
+                except ElementClickInterceptedException as e:
+                    self.logger.warning(f"Click intercepted: {e}")
+                    break
+
+                except Exception as e:
+                    self.logger.error(f"Failed to go to next page: {e}")
+                    break
+
+            return results
         except Exception as e:
             self.logger.error(f"Search failed: {e}")
             return []
@@ -130,21 +194,21 @@ class AmazonScraper:
         """Parse search results and return structured product info."""
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')
         results = []
-        self.logger.info(f"Found {len(soup.select('[data-component-type=\'s-search-result\']'))} search results")
 
         for item in soup.select("[data-component-type='s-search-result']"):
             try:
+                # Skip sponsored products to dedup
+                if item.select_one("span.puis-label-popover-default"):
+                    continue
+
                 title = None
                 for selector in [
                     "h2 a span",  # Standard product title
                     ".a-size-base-plus.a-color-base",  # Alternative title format
                     ".a-size-medium.a-color-base",  # Another common title format
-                    # "h2 .a-link-normal",  # Title in link
-                    # ".a-size-mini .a-link-normal"  # Small product title
                 ]:
                     title = self._extract_text(item, selector)
                     if title:
-                        # self.logger.info(f"Found title using selector '{selector}': {title}")
                         break
                 
                 if not title:

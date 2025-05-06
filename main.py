@@ -35,7 +35,7 @@ def display_results(products: List[Dict]) -> None:
     print("\nTop Results:")
     for i, product in enumerate(products[:5], 1):
         price_per_count = product.get("price_per_count", "N/A")
-        print(f"\n{i}. {product.get('title')} - ${product.get('price')} ( Unit Price: {price_per_count} ) \n\n {product.get('url')} \n\n")
+        print(f"\n{i}. {product.get('title')} - ${product.get('price')} ( Unit Price: {price_per_count} ) \n\n{product.get('url')}\n\n")
         print("Ranking Explanation:")
         print(product.get('ranking_explanation', 'No ranking explanation available'))
         print("-" * 80)

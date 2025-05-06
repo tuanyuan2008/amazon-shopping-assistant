@@ -1,35 +1,17 @@
-import re
 import logging
 import math
 from datetime import datetime, date
 from pathlib import Path
-import ssl
 from typing import Dict, List, Optional
 from scipy.special import expit
 from scipy.stats import percentileofscore
-from typing import Dict, List, Optional
 import holidays
 import openai
 import dateparser
-import nltk
-from nltk.corpus import stopwords
 from .utils.config import Config
 from .models import ParsedQuery
 
 MISSING_SCORE = 0.15
-
-# Download required NLTK data with SSL verification disabled
-try:
-    _create_unverified_https_context = ssl._create_unverified_context
-except AttributeError:
-    pass
-else:
-    ssl._create_default_https_context = _create_unverified_https_context
-
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords', quiet=True)
 
 class DateHandler:
     def __init__(self):
@@ -124,6 +106,7 @@ class NLPProcessor:
 
     def _parse_with_llm(self, prompt: str, user_input: str, model_class) -> Dict:
         """Parse input using the LLM."""
+        
         response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
@@ -132,34 +115,49 @@ class NLPProcessor:
             ],
             temperature=0
         )
-        return model_class.parse_raw(response.choices[0].message.content).dict()
+        result = model_class.parse_raw(response.choices[0].message.content).dict()
+        return result
+    
+    def _summarize_results_with_llm(self, results: List[Dict]) -> str:
+        """Use ChatGPT to create a natural language summary of search results."""
+        try:
+            limited_results = results[:10]
+            
+            prompt = (self.prompt_dir / 'results_summarizer.txt').read_text()
+            
+            response = openai.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": f"Results: {limited_results}"}
+                ],
+                temperature=0
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            self.logger.error(f"Error summarizing results with GPT: {e}")
+            raise
 
     def parse_query(self, user_query: str) -> Dict:
         """Parse a shopping query into structured filters and preferences."""
         return self._parse_with_llm(self._get_parser_prompt(False), user_query, ParsedQuery)
 
-    def parse_follow_up(self, follow_up_query: str, previous_context: Dict) -> Dict:
-        """Parse a follow-up query in the context of previous search results."""
-        prompt = self._get_parser_prompt(True)
-
-        # Exclude URL and image_url to conserve tokens
-        shorthand_result = [
-            {k: v for k, v in p.items() if k not in ['url', 'image_url']}
-            for p in previous_context.get('results', [])
-        ]
-        
-        user_input = (
-            f"Previous search: {previous_context.get('query', '')}\n"
-            f"Previous filters: {previous_context.get('filters', {})}\n"
-            f"Previous preferences: {previous_context.get('preferences', {})}\n"
-            f"Previous results: {shorthand_result}\n"
-            f"Follow-up: {follow_up_query}"
-        )
-
-        result = self._parse_with_llm(prompt, user_input, ParsedQuery)
-        if result:
-            result["comparison"] = True
-        return result
+    def parse_follow_up(self, query: str, previous_context: Dict) -> Dict:
+        """Parse a follow-up query using the follow-up prompt."""
+        try:            
+            results_summary = self._summarize_results_with_llm(previous_context.get('results', []))
+            prompt = self._get_parser_prompt(True)
+            user_input = (
+                f"Previous search: {previous_context.get('query', '')}\n"
+                f"Previous filters: {previous_context.get('filters', {})}\n"
+                f"Previous preferences: {previous_context.get('preferences', {})}\n"
+                f"Results summary: {results_summary}\n"
+                f"Follow-up: {query}"
+            )
+            return self._parse_with_llm(prompt, user_input, ParsedQuery)
+        except Exception as e:
+            self.logger.error(f"Error parsing follow-up query: {e}")
+            raise
 
     def rank_products(self, products: List[Dict], filters: Dict, preferences: Dict) -> List[Dict]:
         scored = []
@@ -211,27 +209,31 @@ class NLPProcessor:
         except (ValueError, IndexError):
             return None
     
-    def _filter_tokens(self, text: str) -> set:
-        """Filter tokens from text, keeping meaningful product specs."""
-        stop_words = set(stopwords.words('english'))
-        tokens = text.lower().split()
-        return {token for token in tokens if token not in stop_words and len(token) > 1}
-
     def _calculate_preference_score(self, product: Dict, preferences: Dict) -> tuple[float, str]:
-        product_tokens = self._filter_tokens(product.get('title', ''))
-        # NOTE: our preferences should be pre-filtered by the LLM
-        preference_tokens = set(re.findall(r'\w+', ' '.join(preferences.get('features', [])).lower()))
+        """Calculate how well the product matches user preferences."""
+        product_title = product.get('title', '').lower()
+        features = preferences.get('features', [])
+        preference_tokens = [f.strip().lower() for f in features] if features else []
 
-        if not preference_tokens or not product_tokens:
-            return MISSING_SCORE, f"Preference score: {MISSING_SCORE} (no tokens to compare)"
+        if not preference_tokens:
+            return MISSING_SCORE, f"Preference score: {MISSING_SCORE} (no preferences to match)"
 
-        matched_tokens = preference_tokens & product_tokens
-        missing_tokens = preference_tokens - product_tokens
+        matched_tokens = []
+        missing_tokens = []
+        
+        for token in preference_tokens:
+            if token in product_title:
+                matched_tokens.append(token)
+            else:
+                missing_tokens.append(token)
+        
         match_percentage = len(matched_tokens) / len(preference_tokens)
         
+        explanation = f"Preference score: {match_percentage:.2f} (matched {len(matched_tokens)}/{len(preference_tokens)} features)"
         if missing_tokens:
-            return match_percentage, f"Preference score: {match_percentage:.2f} (matched {len(matched_tokens)}/{len(preference_tokens)} features, missing: {', '.join(missing_tokens)})"
-        return 1.0, f"Preference score: 1.0 (all {len(preference_tokens)} features matched)"
+            explanation += f", missing: {', '.join(missing_tokens)}"
+
+        return match_percentage, explanation
 
     def _get_price_pct_score(self, products: List[Dict], price: float, is_unit_price: bool) -> float:
         key = 'price_per_count' if is_unit_price else 'price'

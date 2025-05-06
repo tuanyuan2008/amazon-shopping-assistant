@@ -33,4 +33,3 @@ class ParsedQuery(BaseModel):
     search_term: str
     filters: Filters
     preferences: Preferences
-    comparison: bool = False
