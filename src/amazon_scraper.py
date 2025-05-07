@@ -77,25 +77,39 @@ class AmazonScraper:
 
     def _get_page_results(self, page: int, first_url: Optional[str] = None) -> List[Dict]:
         """Get results from the current page with retry logic."""
-        max_retries = 3
+        max_retries = 2
         for attempt in range(max_retries):
-            # Wait for search results to load
+            # Wait for search results to load and stabilize
             WebDriverWait(self.driver, 10).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "[data-component-type='s-search-result']"))
             )
             
+            # Additional wait to ensure dynamic content is loaded
+            self.rate_limiter.wait()
+            
+            # Wait for any loading indicators to disappear
+            WebDriverWait(self.driver, 5).until_not(
+                EC.presence_of_element_located((By.CSS_SELECTOR, ".s-loading-spinner"))
+            )
+            
             page_results = self._extract_products()
             
-            if not first_url or (page_results and page_results[0]['url'] != first_url):
-                return page_results
-                
-            if attempt < max_retries - 1:
-                self.logger.info(f"Detected duplicate results, retrying page {page} (attempt {attempt + 1}/{max_retries})")
-                self.driver.refresh()
-                self.rate_limiter.wait()
-            else:
-                self.logger.info("Max retries reached, stopping pagination")
+            if not page_results:
+                self.logger.info("No results found on this page")
                 return []
+            
+            # Check for duplicates only if we have a first_url to compare against
+            if first_url and page_results[0]['url'] == first_url:
+                if attempt < max_retries - 1:
+                    self.logger.info(f"Page {page} not fully loaded, retrying... (attempt {attempt + 1}/{max_retries})")
+                    self.driver.refresh()
+                    self.rate_limiter.wait()
+                    continue
+                else:
+                    self.logger.info("Page not loading properly after retries, stopping pagination")
+                    return []
+            
+            return page_results
         
         return []
 
@@ -103,7 +117,7 @@ class AmazonScraper:
         """Search Amazon for products using a keyword and filter dict."""
         try:
             url = self._construct_search_url(query, filters)
-            self.logger.info(f"Navigating to Amazon: {url}")
+            self.logger.info(f"Searching Amazon: {url}")
             self.driver.get(url)
             self.rate_limiter.wait()
 
@@ -118,37 +132,35 @@ class AmazonScraper:
                     
                 results.extend(page_results)
                 first_url = page_results[0]['url']
-                self.logger.info(f"Found {len(page_results)} products on page {page}, total: {len(results)}")
+                self.logger.info(f"Page {page}: {len(page_results)} products, {len(results)} total")
                 
                 if len(results) >= max_results:
                     results = results[:max_results]
                     break
-                    
-                try:
-                    next_button = WebDriverWait(self.driver, 10).until(
-                        EC.element_to_be_clickable((By.CSS_SELECTOR, "a.s-pagination-next"))
+                
+                # Scroll to bottom and wait for any dynamic content
+                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                self.rate_limiter.wait()
+
+                # Find next button
+                next_button = None
+                for selector in ["a.s-pagination-next", "a[href*='page=']"]:
+                    next_button = WebDriverWait(self.driver, 5).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, selector))
                     )
-                    
-                    if "s-pagination-disabled" in next_button.get_attribute("class"):
-                        self.logger.info("Next button is disabled, stopping.")
+                    if next_button and "s-pagination-disabled" not in next_button.get_attribute("class"):
                         break
 
-                    self.driver.execute_script("arguments[0].scrollIntoView(true);", next_button)
-                    self.driver.execute_script("arguments[0].click();", next_button)
-
-                    WebDriverWait(self.driver, 10).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, "[data-component-type='s-search-result']"))
-                    )
-                    page += 1
-
-                except ElementClickInterceptedException as e:
-                    self.logger.warning(f"Click intercepted: {e}")
+                if not next_button or "s-pagination-disabled" in next_button.get_attribute("class"):
                     break
 
-                except Exception as e:
-                    self.logger.error(f"Failed to go to next page: {e}")
-                    break
+                # Scroll the next button into view and click it
+                self.driver.execute_script("arguments[0].scrollIntoView(true);", next_button)
+                self.driver.execute_script("arguments[0].click();", next_button)
+                page += 1
+                self.rate_limiter.wait()
 
+            self.logger.info(f"Found {len(results)} products total")
             return results
         except Exception as e:
             self.logger.error(f"Search failed: {e}")
@@ -167,6 +179,14 @@ class AmazonScraper:
             rh_parts.append(f"p_36:{int(price_min) * 100}-{int(price_max) * 100}")
         elif price_max is not None:
             rh_parts.append(f"p_36:{int(price_max) * 100}")
+
+        min_rating = filters.get('min_rating')
+        if min_rating:
+            rh_parts.append(f"p_72:{int(min_rating * 10)}")
+
+        min_reviews = filters.get('min_reviews')
+        if min_reviews:
+            rh_parts.append(f"p_n_reviews:{min_reviews}")
 
         if filters.get('prime'):
             rh_parts.append("p_85:2470955011")

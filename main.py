@@ -16,9 +16,9 @@ class AssistantState(TypedDict, total=False):
     previous_context: Dict
 
 rate_limiter = RateLimiter(
-    max_requests_per_minute=50,
-    request_delay_min=2,
-    request_delay_max=5
+    max_requests_per_minute=30,
+    request_delay_min=3,
+    request_delay_max=6
 )
 
 graph = StateGraph(state_schema=AssistantState)
@@ -67,6 +67,10 @@ if __name__ == "__main__":
         
         ranked_products = result.get("ranked_products", [])
         if ranked_products:
+            summary = nlp_processor.summarize_results_with_llm(ranked_products)
+            print("\nSummary of Results:")
+            print(summary)
+            
             display_results(ranked_products)
             
             previous_context = {
