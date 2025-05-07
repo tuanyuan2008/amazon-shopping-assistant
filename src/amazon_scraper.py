@@ -76,20 +76,12 @@ class AmazonScraper:
         return driver
 
     def _get_page_results(self, page: int, first_url: Optional[str] = None) -> List[Dict]:
-        """Get results from the current page with retry logic."""
+        """Get results from the current page."""
         max_retries = 2
         for attempt in range(max_retries):
-            # Wait for search results to load and stabilize
+            # Wait for search results to load
             WebDriverWait(self.driver, 10).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "[data-component-type='s-search-result']"))
-            )
-            
-            # Additional wait to ensure dynamic content is loaded
-            self.rate_limiter.wait()
-            
-            # Wait for any loading indicators to disappear
-            WebDriverWait(self.driver, 5).until_not(
-                EC.presence_of_element_located((By.CSS_SELECTOR, ".s-loading-spinner"))
             )
             
             page_results = self._extract_products()
@@ -98,15 +90,14 @@ class AmazonScraper:
                 self.logger.info("No results found on this page")
                 return []
             
-            # Check for duplicates only if we have a first_url to compare against
+            # Check if we're seeing the same page
             if first_url and page_results[0]['url'] == first_url:
                 if attempt < max_retries - 1:
                     self.logger.info(f"Page {page} not fully loaded, retrying... (attempt {attempt + 1}/{max_retries})")
                     self.driver.refresh()
-                    self.rate_limiter.wait()
                     continue
                 else:
-                    self.logger.info("Page not loading properly after retries, stopping pagination")
+                    self.logger.info("Page not loading properly after retries")
                     return []
             
             return page_results
@@ -137,33 +128,36 @@ class AmazonScraper:
                 if len(results) >= max_results:
                     results = results[:max_results]
                     break
-                
-                # Scroll to bottom and wait for any dynamic content
+
+                # Scroll to bottom to ensure next button is visible
                 self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                 self.rate_limiter.wait()
 
                 # Find next button
                 next_button = None
                 for selector in ["a.s-pagination-next", "a[href*='page=']"]:
-                    next_button = WebDriverWait(self.driver, 5).until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, selector))
-                    )
-                    if next_button and "s-pagination-disabled" not in next_button.get_attribute("class"):
+                    buttons = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                    if buttons and "s-pagination-disabled" not in buttons[0].get_attribute("class"):
+                        next_button = buttons[0]
                         break
 
-                if not next_button or "s-pagination-disabled" in next_button.get_attribute("class"):
+                if not next_button:
+                    self.logger.info("No more results available")
                     break
 
-                # Scroll the next button into view and click it
-                self.driver.execute_script("arguments[0].scrollIntoView(true);", next_button)
-                self.driver.execute_script("arguments[0].click();", next_button)
-                page += 1
-                self.rate_limiter.wait()
+                # Get the next page URL and navigate directly
+                next_url = next_button.get_attribute("href")
+                if next_url:
+                    self.driver.get(next_url)
+                    page += 1
+                    self.rate_limiter.wait()
+                else:
+                    break
 
             self.logger.info(f"Found {len(results)} products total")
             return results
         except Exception as e:
-            self.logger.error(f"Search failed: {e}")
+            self.logger.error("Search failed:", exc_info=True)
             return []
 
     def _construct_search_url(self, query: str, filters: Dict) -> str:
@@ -252,7 +246,7 @@ class AmazonScraper:
                 }
                 results.append(product)
             except Exception as e:
-                self.logger.warning(f"Product extraction failed: {e}")
+                self.logger.error("Product extraction failed:", exc_info=True)
                 continue
 
         return results
@@ -295,7 +289,7 @@ class AmazonScraper:
             parsed_dates = [dateparser.parse(d, settings={"PREFER_DATES_FROM": "future"}) for d in date_matches]
             return min([d.date() for d in parsed_dates if d]) if parsed_dates else None
         except Exception as e:
-            self.logger.warning(f"Delivery date extraction failed: {e}")
+            self.logger.error("Delivery date extraction failed:", exc_info=True)
             return None
 
     def _extract_inline_unit_price(self, element) -> Optional[str]:
@@ -304,7 +298,7 @@ class AmazonScraper:
             match = re.search(r"\$([\d\.]+)\s*/\s*(\w+)", text)
             return f"${match.group(1)} per {match.group(2)}" if match else None
         except Exception as e:
-            self.logger.warning(f"Unit price extraction failed: {e}")
+            self.logger.error("Unit price extraction failed:", exc_info=True)
             return None
 
     def _is_prime(self, element) -> bool:

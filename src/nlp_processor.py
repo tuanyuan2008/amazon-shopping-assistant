@@ -91,6 +91,7 @@ class NLPProcessor:
 
     def rank_products(self, products: List[Dict], filters: Dict, preferences: Dict) -> List[Dict]:
         scored = []
+        all_non_positive_scores = True
         for product in products:
             score, explanation = self._calculate_product_score(product, filters, preferences, products)
             scored.append({
@@ -98,7 +99,10 @@ class NLPProcessor:
                 "score": score,
                 "ranking_explanation": explanation,
             })
-        return sorted(scored, key=lambda x: x["score"], reverse=True)
+            if score > 0:
+                all_non_positive_scores = False
+        self.logger.info(f"All non-positive scores: {all_non_positive_scores}")
+        return sorted(scored, key=lambda x: x["score"], reverse=not all_non_positive_scores)
 
     def _calculate_product_score(
         self, 
@@ -118,11 +122,11 @@ class NLPProcessor:
         score = 1.0
         explanations = []
         for name, (sub_score, explanation) in components.items():
+            # if no preference match, we can ignore this filter
+            if sub_score == 0 and name == "preference":
+                score *= -1
+                continue
             explanations.append(f"- {explanation}")
-            if sub_score == 0.0:
-                score = 0.0
-                explanations[-1] = f"- {name.title()} score: 0 (excluded due to missing hard requirement)"
-                break
             score *= sub_score
 
         return score, "\n".join(explanations) + f"\nTotal score: {score:.4f}"
