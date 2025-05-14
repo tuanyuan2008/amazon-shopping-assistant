@@ -104,6 +104,9 @@ amazon-shopping-assistant/
 - Focuses on extracting and ranking relevant product information
 - Handles Amazon's dynamic interface changes
 
+## Demo
+https://youtu.be/PkUXHmztPpU
+
 ---
 
 **To run the agent, always use:**
