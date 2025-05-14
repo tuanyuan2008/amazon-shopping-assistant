@@ -104,8 +104,10 @@ amazon-shopping-assistant/
 - Focuses on extracting and ranking relevant product information
 - Handles Amazon's dynamic interface changes
 
-## Demo
-https://youtu.be/PkUXHmztPpU
+## Walk-Through Demo
+https://youtu.be/FADMUAF30ak
+
+Find the report [here](https://hackmd.io/@nJ3wWZdKQGi1_-J7hyBKlg/r177wlNxlg).
 
 ---
 
