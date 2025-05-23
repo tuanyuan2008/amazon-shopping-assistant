@@ -1,0 +1,140 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f7f9;
+    color: #333;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 900px;
+    margin: 30px auto;
+    padding: 20px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+    color: #2c3e50;
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+h2 {
+    color: #34495e;
+    border-bottom: 2px solid #eee;
+    padding-bottom: 10px;
+    margin-top: 40px;
+    margin-bottom: 20px;
+}
+
+form {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 30px;
+}
+
+form input[type="text"] {
+    flex-grow: 1;
+    padding: 12px 15px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 16px;
+    box-sizing: border-box;
+}
+
+form input[type="text"]:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    outline: none;
+}
+
+form button[type="submit"] {
+    padding: 12px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out;
+}
+
+form button[type="submit"]:hover {
+    background-color: #0056b3;
+}
+
+.user-query {
+    background-color: #e9ecef;
+    padding: 10px 15px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    font-size: 1em;
+}
+
+.user-query strong {
+    color: #0056b3;
+}
+
+#summary-area {
+    background-color: #e9f7fd;
+    border: 1px solid #d1ecf1;
+    color: #0c5460;
+    padding: 15px;
+    margin-bottom: 30px;
+    border-radius: 6px;
+}
+
+#results-area .product {
+    background-color: #fff;
+    border: 1px solid #eef;
+    padding: 20px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    transition: box-shadow 0.2s ease-in-out;
+}
+
+#results-area .product:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+#results-area .product h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    color: #007bff;
+    font-size: 1.4em;
+}
+
+#results-area .product p {
+    margin-bottom: 8px;
+    font-size: 0.95em;
+}
+
+#results-area .product .product-url a {
+    color: #0056b3;
+    text-decoration: none;
+    word-break: break-all;
+}
+
+#results-area .product .product-url a:hover {
+    text-decoration: underline;
+}
+
+#results-area .product .explanation {
+    font-size: 0.9em;
+    color: #555;
+    background-color: #f8f9fa;
+    padding: 10px;
+    border-radius: 4px;
+    border-left: 3px solid #007bff;
+}
+
+#results-area > p { /* For "No products found" or "Product listings will appear here" */
+    text-align: center;
+    color: #777;
+    font-size: 1.1em;
+    padding: 20px;
+}

@@ -1,84 +1,34 @@
-from typing import TypedDict, List, Dict
-from langgraph.graph import StateGraph, END
-from src.utils.rate_limiter import RateLimiter
-from src.nlp_processor import NLPProcessor
-from src.amazon_scraper import AmazonScraper
-from src.langgraph_nodes import parse_user_query, search_amazon, rank_products
-
-class AssistantState(TypedDict, total=False):
-    user_input: str
-    rate_limiter: RateLimiter
-    nlp_processor: NLPProcessor
-    scraper: AmazonScraper
-    parsed_query: Dict
-    products: List[Dict]
-    ranked_products: List[Dict]
-    previous_context: Dict
-
-rate_limiter = RateLimiter(
-    max_requests_per_minute=30,
-    request_delay_min=3,
-    request_delay_max=6
+from src.agent import (
+    initialize_agent,
+    process_query,
+    format_display_results,
+    format_summary
 )
 
-graph = StateGraph(state_schema=AssistantState)
-graph.add_node("parse_query", parse_user_query)
-graph.add_node("search_amazon", search_amazon)
-graph.add_node("rank_products", rank_products)
-graph.add_edge("parse_query", "search_amazon")
-graph.add_edge("search_amazon", "rank_products")
-graph.add_edge("rank_products", END)
-graph.set_entry_point("parse_query")
-
-def display_results(products: List[Dict]) -> None:
-    """Display the ranked products with their explanations."""
-    print("\nTop Results:")
-    for i, product in enumerate(products[:5], 1):
-        price_per_count = product.get("price_per_count", "N/A")
-        print(f"\n{i}. {product.get('title')} - ${product.get('price')} ( Unit Price: {price_per_count} ) \n\n{product.get('url')}\n\n")
-        print("Ranking Explanation:")
-        print(product.get('ranking_explanation', 'No ranking explanation available'))
-        print("-" * 80)
-
 if __name__ == "__main__":
-    nlp_processor = NLPProcessor()
-    scraper = AmazonScraper(rate_limiter=rate_limiter)
+    nlp_processor, scraper, rate_limiter, app = initialize_agent()
     previous_context = {}
-    
+
     while True:
         if not previous_context:
             user_input = input("\nWhat are you looking for? (or 'quit' to exit): ").strip()
         else:
             user_input = input("\nHow would you like to modify your search? (or 'quit' to exit): ").strip()
-            
+
         if user_input.lower() == 'quit':
             break
-            
-        initial_state = {
-            "user_input": user_input,
-            "rate_limiter": rate_limiter,
-            "nlp_processor": nlp_processor,
-            "scraper": scraper,
-            "previous_context": previous_context
-        }
-        
-        app = graph.compile()
-        result = app.invoke(initial_state)
-        
-        ranked_products = result.get("ranked_products", [])
+
+        ranked_products, summary_text, new_context = process_query(
+            app, nlp_processor, scraper, rate_limiter, user_input, previous_context
+        )
+
         if ranked_products:
-            summary = nlp_processor.summarize_results_with_llm(ranked_products)
-            print("\nSummary of Results:")
-            print(summary)
+            if summary_text:
+                print(format_summary(summary_text))
             
-            display_results(ranked_products)
+            print(format_display_results(ranked_products))
             
-            previous_context = {
-                "query": result.get("parsed_query", {}).get("search_term", ""),
-                "filters": result.get("parsed_query", {}).get("filters", {}),
-                "preferences": result.get("parsed_query", {}).get("preferences", {}),
-                "results": ranked_products
-            }
+            previous_context = new_context
             
             print("\nYou can modify your search by:")
             print("- Adjusting the price range")
