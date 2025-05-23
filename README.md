@@ -71,6 +71,32 @@ An autonomous agent that helps users shop on Amazon using natural language proce
 - When prompted, enter your shopping request in natural language (e.g., "Find me a coffee maker under $100 with good reviews that's available for Prime shipping").
 - The agent will parse your query, search Amazon, rank products, and display the top results.
 
+## Running the Web UI
+
+As an alternative to the command-line interface, you can interact with the Amazon Shopping Assistant through a web-based UI.
+
+1.  **Ensure Dependencies are Installed**:
+    Make sure you have all the necessary Python packages installed. If you've followed the main "Setup" instructions, these should already be in your virtual environment. If not, or if you're setting up fresh, install them from `requirements.txt`:
+    ```bash
+    pip install -r requirements.txt
+    ```
+    *(Ensure your virtual environment is activated if you are using one.)*
+
+2.  **Start the Flask Development Server**:
+    Run the `app.py` script from the root of the project:
+    ```bash
+    python app.py
+    ```
+
+3.  **Access the UI**:
+    Open your web browser and navigate to:
+    ```
+    http://127.0.0.1:5000
+    ```
+    You should see the Amazon Shopping Assistant interface, where you can type your search queries.
+
+The web UI provides a graphical way to input your shopping requests and view the summarized results and product listings.
+
 ## Project Structure
 
 ```

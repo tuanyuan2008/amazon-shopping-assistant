@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon Shopping Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* Remove old inline styles if they are now covered by style.css */
+        /* For example, if .user-query styling is fully in style.css, it can be removed here. */
+        /* However, it's safer to keep specific overrides or ensure style.css covers everything. */
+        /* The styles previously here are now mostly in style.css */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Amazon Shopping Assistant</h1>
+
+        <form action="/" method="post">
+            <input type="text" name="query" placeholder="What are you looking for?" size="50" value="{{ query if query else '' }}">
+            <button type="submit">Search</button>
+        </form>
+
+        {% if query %}
+        <div class="user-query">
+            <p>Showing results for: <strong>{{ query }}</strong></p>
+        </div>
+        {% endif %}
+
+        <h2>Summary</h2>
+        <div id="summary-area">
+            {% if summary %}
+                <p>{{ summary }}</p>
+            {% else %}
+                <p>Summary of results will appear here...</p>
+            {% endif %}
+        </div>
+
+        <h2>Results</h2>
+        <div id="results-area">
+            {% if products and products|length > 0 %}
+                {% for product in products[:5] %} {# Display top 5 products as per original CLI logic #}
+                    <div class="product">
+                        <h3>{{ product.get('title', 'N/A') }}</h3>
+                        <p>Price: ${{ product.get('price', 'N/A') }} 
+                           (Unit Price: {{ product.get('price_per_count', 'N/A') }})
+                        </p>
+                        <p class="product-url">
+                            <a href="{{ product.get('url', '#') }}" target="_blank">{{ product.get('url', 'No URL available') }}</a>
+                        </p>
+                        <p class="explanation">
+                            {{ product.get('ranking_explanation', 'No ranking explanation available') }}
+                        </p>
+                    </div>
+                {% endfor %}
+            {% elif query %} {# Only show "no results" if a query was made #}
+                <p>No products found for your query.</p>
+            {% else %}
+                <p>Product listings will appear here once you search.</p>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
