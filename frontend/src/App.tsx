@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import QueryInput from './components/QueryInput';
-import ResultsDisplay from './components/ResultsDisplay';
+// import ResultsDisplay from './components/ResultsDisplay'; // Commented out
+import ProductGraphDisplay from './components/ProductGraphDisplay'; // Added
 import SummaryDisplay from './components/SummaryDisplay';
 import * as ApiService from './services/api';
 import './App.css'; // Keep for any global non-Tailwind overrides or specific component styles if needed
@@ -28,7 +29,20 @@ function App() {
 
     try {
       const apiResponse = await ApiService.fetchQueryResults(currentQuery, previousContext);
-      setProducts(apiResponse.products);
+      
+      const parsedProducts = apiResponse.products.map(product => {
+        if (typeof product.price === 'string') {
+          const numericPrice = parseFloat(product.price.replace(/[^\d.-]/g, ''));
+          if (isNaN(numericPrice)) {
+            console.warn(`Could not parse price for product: ${product.title}, price: ${product.price}`);
+            return product; // Keep original product if parsing fails
+          }
+          return { ...product, price: numericPrice };
+        }
+        return product;
+      });
+
+      setProducts(parsedProducts);
       setSummary(apiResponse.summary);
       setPreviousContext(apiResponse.new_context);
     } catch (err) {
@@ -86,11 +100,12 @@ function App() {
 
         {!isPreSearchState && !error && (isLoading || products.length > 0 || summary) && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <section className="summary-section md:col-span-1 p-6 bg-white rounded-xl shadow-lg">
+            <section className="summary-section md:col-span-1 p-6 bg-white rounded-xl shadow-lg max-h-[600px] overflow-y-auto">
               <SummaryDisplay summary={summary} isLoading={isLoading && !summary} />
             </section>
-            <section className="results-section md:col-span-2 p-6 bg-white rounded-xl shadow-lg">
-              <ResultsDisplay products={products} isLoading={isLoading && products.length === 0} />
+            <section className="results-section md:col-span-2 p-6 bg-white rounded-xl shadow-lg min-h-[600px]">
+              {/* <ResultsDisplay products={products} isLoading={isLoading && products.length === 0} /> */}
+              <ProductGraphDisplay products={products} />
             </section> 
           </div>
         )}
