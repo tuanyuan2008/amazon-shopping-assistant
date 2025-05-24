@@ -63,7 +63,7 @@ function App() {
           </header>
         )}
 
-        <section className={`query-section p-6 bg-white rounded-xl shadow-lg ${isPreSearchState ? '' : 'mb-8'}`}>
+        <section className={`query-section p-6 ${isPreSearchState ? '' : 'mb-8'}`}>
           <QueryInput
             currentQuery={currentQuery}
             setCurrentQuery={setCurrentQuery}
