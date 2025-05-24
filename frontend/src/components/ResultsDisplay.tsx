@@ -39,14 +39,14 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ products, isLoading }) 
       {products.map((product, index) => (
         <div 
           key={index} 
-          className="product-item bg-white p-5 rounded-lg shadow-md border border-slate-200 hover:shadow-xl transition-shadow duration-300 ease-in-out"
+          className="product-item bg-white p-5 rounded-xl shadow-md border border-slate-200 hover:shadow-xl transition-shadow duration-300 ease-in-out"
         >
-          <h3 className="text-xl font-semibold text-sky-600 mb-2">
+          <h3 className="text-xl font-semibold text-baby-robin-blue-dark mb-2">
             <a 
               href={product.url} 
               target="_blank" 
               rel="noopener noreferrer"
-              className="hover:text-sky-700 hover:underline"
+              className="hover:text-baby-robin-blue hover:underline"
             >
               {product.title || 'N/A'}
             </a>
@@ -61,7 +61,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ products, isLoading }) 
             </p>
           )}
           {product.ranking_explanation && (
-            <div className="ranking-explanation mt-3 p-3 bg-sky-50 border-l-4 border-sky-500 rounded-r-md text-sm text-slate-700">
+            <div className="ranking-explanation mt-3 p-3 bg-baby-robin-blue border-l-4 border-baby-robin-blue-dark rounded-xl text-sm text-slate-700">
               <p className="italic"><strong className="font-medium">Agent's Note:</strong> {product.ranking_explanation}</p>
             </div>
           )}
