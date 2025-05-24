@@ -66,61 +66,101 @@ An autonomous agent that helps users shop on Amazon using natural language proce
    safaridriver --enable
    ```
    
-## Usage
+## Usage (CLI)
 
+The original command-line interface (CLI) for the agent can be run as described below. For the new web-based UI, see the "Running the Web Application" section.
+
+- After completing the "Setup" steps (including activating the virtual environment and setting up the `.env` file):
+- Run the CLI using:
+  ```bash
+  python main.py
+  ```
 - When prompted, enter your shopping request in natural language (e.g., "Find me a coffee maker under $100 with good reviews that's available for Prime shipping").
-- The agent will parse your query, search Amazon, rank products, and display the top results.
+- The agent will parse your query, search Amazon, rank products, and display the top results in the console.
 
-## Running the Web UI
+## Running the Web Application (React UI + Python API)
 
-As an alternative to the command-line interface, you can interact with the Amazon Shopping Assistant through a web-based UI.
+The primary way to interact with the Amazon Shopping Assistant is now through a web interface powered by a React frontend and a Python (Flask) backend API. These two components need to be run concurrently.
 
-1.  **Ensure Dependencies are Installed**:
-    Make sure you have all the necessary Python packages installed. If you've followed the main "Setup" instructions, these should already be in your virtual environment. If not, or if you're setting up fresh, install them from `requirements.txt`:
+### 1. Backend Setup & Execution (API Server)
+
+The backend server provides the API that the frontend consumes.
+
+-   **Location**: The project root directory (`amazon-shopping-assistant/`).
+-   **Environment**:
+    -   Ensure your Python virtual environment is activated (e.g., `source venv/bin/activate` if you used `setup.sh`).
+    -   Make sure you have a `.env` file in the project root with your `OPENAI_API_KEY` and any other necessary configurations (refer to `.env.example`).
+-   **Dependencies**: Install or update Python dependencies:
     ```bash
     pip install -r requirements.txt
     ```
-    *(Ensure your virtual environment is activated if you are using one.)*
-
-2.  **Start the Flask Development Server**:
-    Run the `app.py` script from the root of the project:
+-   **Running the API Server**:
     ```bash
     python app.py
     ```
+-   **API Availability**: The backend API will start and typically be available at `http://127.0.0.1:5000`. The main endpoint used by the frontend is `POST /api/query`.
 
-3.  **Access the UI**:
-    Open your web browser and navigate to:
-    ```
-    http://127.0.0.1:5000
-    ```
-    You should see the Amazon Shopping Assistant interface, where you can type your search queries.
+### 2. Frontend Setup & Execution (React UI)
 
-The web UI provides a graphical way to input your shopping requests and view the summarized results and product listings.
+The frontend provides the user interface in your browser.
+
+-   **Location**: The `frontend/` directory.
+-   **Dependencies**: Navigate to the frontend directory and install Node.js dependencies:
+    ```bash
+    cd frontend
+    npm install
+    ```
+-   **Running the Frontend Development Server**:
+    ```bash
+    npm run dev
+    ```
+    *(Note: In some environments, if `vite` is not found, you might need to run `npx vite` or `./node_modules/.bin/vite` directly from the `frontend` directory.)*
+-   **Accessing the UI**: Vite will typically start the frontend development server at `http://localhost:5173` (or another port if 5173 is busy - check the output in your terminal). Open this URL in your web browser.
+
+### Development Note:
+Both the backend API server (`python app.py`) and the frontend development server (`npm run dev` in the `frontend` directory) must be running at the same time for the web application to function correctly. The React frontend makes requests to the Python backend API to process queries and fetch results.
 
 ## Project Structure
 
 ```
 amazon-shopping-assistant/
 ├── README.md
-├── requirements.txt
-├── setup.sh
-├── .envrc                  # direnv configuration
-├── .env.example
-├── .env                    # environment variables
-├── main.py                 # Main entry point (LangGraph workflow)
-├── venv/                   # Virtual environment directory
-├── src/
+├── requirements.txt        # Python backend dependencies
+├── setup.sh                # Script to set up Python environment
+├── .env.example            # Example environment variables
+├── .env                    # Your environment variables (contains API keys)
+├── app.py                  # Main Flask application (Backend API server)
+├── main.py                 # Original CLI entry point for the agent
+├── frontend/               # React frontend application
+│   ├── package.json        # Frontend dependencies and scripts
+│   ├── vite.config.ts      # Vite configuration (build tool for frontend)
+│   ├── tailwind.config.js  # Tailwind CSS configuration
+│   ├── postcss.config.js   # PostCSS configuration
+│   ├── public/             # Static assets for the frontend
+│   └── src/                # Frontend source code (React components, services)
+│       ├── App.tsx         # Main React application component
+│       ├── index.css       # Main CSS file (includes Tailwind directives)
+│       └── components/     # Reusable React components
+│           ├── QueryInput.tsx
+│           ├── ResultsDisplay.tsx
+│           └── SummaryDisplay.tsx
+│       └── services/       # API service for frontend-backend communication
+│           └── api.ts
+├── src/                    # Python source code for the backend agent logic
 │   ├── __init__.py
-│   ├── amazon_scraper.py
-│   ├── nlp_processor.py
-│   ├── langgraph_nodes.py  # Stateless node functions for LangGraph
-│   ├── models.py           # Pydantic models for data validation
-│   └── utils/
+│   ├── agent.py            # Core agent workflow and state management
+│   ├── amazon_scraper.py   # Selenium-based Amazon scraper
+│   ├── nlp_processor.py    # NLP processing using OpenAI
+│   ├── langgraph_nodes.py  # Nodes for the LangGraph agent
+│   ├── models.py           # Pydantic models
+│   └── utils/              # Utility modules (config, rate limiter)
 │       ├── __init__.py
-│       ├── rate_limiter.py
-│       └── config.py
-└── tests/
-    └── __init__.py
+│       ├── config.py
+│       └── rate_limiter.py
+├── tests/                  # Python backend tests
+│   ├── __init__.py
+│   └── test_app.py         # Pytest tests for the Flask API
+└── venv/                   # Python virtual environment (if created by setup.sh)
 ```
 
 ## Development Notes
