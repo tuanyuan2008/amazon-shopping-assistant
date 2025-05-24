@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import QueryInput from './components/QueryInput';
-import ResultsDisplay from './components/ResultsDisplay'; // Uncommented
+import ResultsDisplay from './components/ResultsDisplay';
 import SummaryDisplay from './components/SummaryDisplay';
-import * as ApiService from './services/api'; // Use namespace import
+import * as ApiService from './services/api';
 import './App.css'; // Keep for any global non-Tailwind overrides or specific component styles if needed
 
 // Removed local Product interface alias:
@@ -10,15 +10,15 @@ import './App.css'; // Keep for any global non-Tailwind overrides or specific co
 
 function App() {
   const [currentQuery, setCurrentQuery] = useState<string>('');
-  const [products, setProducts] = useState<ApiService.Product[]>([]); // Uncommented and using ApiService.Product
+  const [products, setProducts] = useState<ApiService.Product[]>([]);
   const [summary, setSummary] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<ApiService.ApiError | null>(null); // Updated type
+  const [error, setError] = useState<ApiService.ApiError | null>(null);
   const [previousContext, setPreviousContext] = useState<Record<string, any>>({});
 
   const handleSubmitQuery = async () => {
     if (!currentQuery.trim()) {
-      alert('Please enter a query.');
+      // alert('Please enter a query.'); // Or handle differently
       return;
     }
     
@@ -27,15 +27,15 @@ function App() {
     setError(null); 
 
     try {
-      const apiResponse = await ApiService.fetchQueryResults(currentQuery, previousContext); // Updated call
-      setProducts(apiResponse.products); // Uncommented
+      const apiResponse = await ApiService.fetchQueryResults(currentQuery, previousContext);
+      setProducts(apiResponse.products);
       setSummary(apiResponse.summary);
       setPreviousContext(apiResponse.new_context);
     } catch (err) {
       console.error('API Error:', err);
-      const apiErr = err as ApiService.ApiError; // Updated type assertion
+      const apiErr = err as ApiService.ApiError;
       setError({ message: apiErr.message || 'An unexpected error occurred.' , details: apiErr.details });
-      setProducts([]); // Uncommented
+      setProducts([]);
       setSummary(null);  
     } finally {
       setIsLoading(false);
@@ -72,7 +72,7 @@ function App() {
           </section>
         )}
 
-        {!error && (isLoading || products.length > 0 || summary) && ( // Condition restored
+        {!error && (isLoading || products.length > 0 || summary) && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <section className="summary-section md:col-span-1 p-6 bg-white rounded-lg shadow-lg">
               <SummaryDisplay summary={summary} isLoading={isLoading && !summary} />
@@ -83,12 +83,11 @@ function App() {
           </div>
         )}
         
-        {!error && !isLoading && products.length === 0 && !summary && ( // Condition restored
+        {!error && !isLoading && products.length === 0 && !summary && (
              <div className="text-center p-6 bg-white rounded-lg shadow-lg">
                 <p className="text-slate-500 text-lg">Enter a query above to start searching!</p>
             </div>
         )}
-
 
         <footer className="text-center mt-12 py-6 text-sm text-slate-500">
           <p>Amazon Shopping Assistant UI - Tailwind Version</p>

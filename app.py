@@ -49,4 +49,4 @@ def api_query():
 if __name__ == "__main__":
     # Note: For development, Flask's built-in server is fine.
     # For production, use a proper WSGI server like Gunicorn or uWSGI.
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5001)
