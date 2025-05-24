@@ -67,7 +67,9 @@ class NLPProcessor:
 
     def parse_query(self, user_query: str) -> Dict:
         """Parse a shopping query into structured filters and preferences."""
-        return self._parse_with_llm(self._get_parser_prompt(False), user_query, ParsedQuery)
+        result = self._parse_with_llm(self._get_parser_prompt(False), user_query, ParsedQuery)
+        self.logger.info(f"Processing main query with preferences: {result.get('preferences', {})}")
+        return result
 
     def parse_follow_up(self, query: str, previous_context: Dict) -> Dict:
         """Parse a follow-up query using the follow-up prompt."""
@@ -81,6 +83,7 @@ class NLPProcessor:
                 f"Results summary: {results_summary}\n"
                 f"Follow-up: {query}"
             )
+            self.logger.info(f"Processing follow-up query with preferences: {previous_context.get('preferences', {})}")
             return self._parse_with_llm(prompt, user_input, ParsedQuery)
         except Exception as e:
             self.logger.error(f"Error parsing follow-up query: {e}")

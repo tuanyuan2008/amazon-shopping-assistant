@@ -1,53 +1,52 @@
-from flask import Flask, render_template, request, session
+from flask import Flask, request, jsonify
+from flask_cors import CORS # Import CORS
 from src.agent import (
     initialize_agent,
-    process_query,
-    format_display_results,
-    format_summary
+    process_query
+    # format_display_results and format_summary are no longer needed here
 )
 import os
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24) # Needed for session management
+app.secret_key = os.urandom(24) # Kept for now, might be used by extensions
+
+# Initialize CORS, allowing all origins for now.
+# For production, specify origins: CORS(app, origins=["http://localhost:3000"])
+CORS(app) 
 
 # Initialize agent components once when the app starts
+# These are global and will be used by the /api/query endpoint
 nlp_processor, scraper, rate_limiter, graph_app = initialize_agent()
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/', methods=['GET'])
 def home():
-    if request.method == 'POST':
-        user_query = request.form.get('query')
-        previous_context = session.get('previous_context', {})
+    # This route now just confirms the API is running
+    return jsonify({"message": "Backend API is running"})
 
-        ranked_products, summary_text, new_context = process_query(
-            graph_app, nlp_processor, scraper, rate_limiter, user_query, previous_context
-        )
+@app.route('/api/query', methods=['POST'])
+def api_query():
+    data = request.json
+    if not data:
+        return jsonify({"error": "Invalid JSON payload"}), 400
 
-        session['previous_context'] = new_context
+    user_input = data.get('user_input')
+    previous_context = data.get('previous_context', {}) # Default to empty dict if not provided
 
-        # The format_display_results and format_summary from src.agent return strings,
-        # which might not be ideal for direct HTML rendering if they contain HTML.
-        # For now, we'll pass the raw data and let Jinja handle the structure.
-        # If these functions were designed to output safe HTML, we could use them directly.
-        
-        # We will adapt the display logic in the template.
-        # For now, let's pass the raw ranked_products and summary_text.
-        # The format_summary is simple enough to be used.
-        
-        formatted_summary = format_summary(summary_text) if summary_text else "No summary available."
-        
-        # We'll pass ranked_products directly and let the template handle formatting.
-        # The format_display_results function creates a single string, 
-        # which is less flexible for templating than having the list of products.
+    if not user_input:
+        return jsonify({"error": "user_input is required"}), 400
 
-        return render_template('index.html', 
-                               query=user_query, 
-                               summary=formatted_summary, 
-                               products=ranked_products)
-    
-    # GET request
-    session.pop('previous_context', None) # Reset context on new GET
-    return render_template('index.html', summary="Summary of results will appear here...", products=[])
+    # Call the existing agent logic
+    ranked_products, summary_text, new_context = process_query(
+        graph_app, nlp_processor, scraper, rate_limiter, user_input, previous_context
+    )
+
+    return jsonify({
+        "products": ranked_products,
+        "summary": summary_text,
+        "new_context": new_context
+    })
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Note: For development, Flask's built-in server is fine.
+    # For production, use a proper WSGI server like Gunicorn or uWSGI.
+    app.run(debug=True, host='0.0.0.0', port=5001)

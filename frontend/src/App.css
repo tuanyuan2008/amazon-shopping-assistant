@@ -1,0 +1,7 @@
+/* 
+  Existing styles from App.css are removed. 
+  Styling will be primarily handled by Tailwind CSS utility classes 
+  applied directly in components or through src/index.css.
+  This file can be used for very specific global styles or component-specific
+  CSS that is hard to achieve with Tailwind alone, but for now, it's clean.
+*/

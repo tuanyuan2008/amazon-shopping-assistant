@@ -17,3 +17,4 @@ nltk==3.8.1
 Flask
 pytest
 scipy
+Flask-CORS

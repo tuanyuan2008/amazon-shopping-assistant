@@ -1,200 +1,173 @@
 import pytest
+import json # For working with JSON data
 from unittest.mock import patch, MagicMock
 
-# Mock initialize_agent from src.agent BEFORE app is imported.
-# This is crucial because initialize_agent is called at the global scope in app.py.
-# It needs to return a tuple of 4 items, as expected by app.py
-mock_nlp_processor = MagicMock()
-mock_scraper = MagicMock()
-mock_rate_limiter = MagicMock()
-mock_graph_app = MagicMock()
+# --- Global Mocking for initialize_agent ---
+# This needs to be active BEFORE 'app' is imported.
+mock_nlp_processor_global = MagicMock()
+mock_scraper_global = MagicMock()
+mock_rate_limiter_global = MagicMock()
+mock_graph_app_global = MagicMock()
 
-# The patch should target 'src.agent.initialize_agent' because that's where
-# the actual function resides. When app.py calls 'initialize_agent' (after
-# 'from src.agent import initialize_agent'), this patched version will be used.
-patcher = patch('src.agent.initialize_agent', return_value=(
-    mock_nlp_processor,
-    mock_scraper,
-    mock_rate_limiter,
-    mock_graph_app
+patcher_initialize_agent = patch('src.agent.initialize_agent', return_value=(
+    mock_nlp_processor_global,
+    mock_scraper_global,
+    mock_rate_limiter_global,
+    mock_graph_app_global
 ))
-# Start the patch before importing app.py
-# We need to keep this patcher object to stop it later if necessary,
-# or use patch.object or patch.dict for finer control if this were in a fixture.
-# For a module-level patch like this that needs to be active before an import,
-# starting it globally here is one approach.
-# Alternatively, structuring app.py to have a create_app() function is cleaner.
-patcher.start()
+patcher_initialize_agent.start()
+# --- End Global Mocking ---
 
-
-# Now that src.agent.initialize_agent is patched, we can import the Flask app.
-# The global variables in app.py (nlp_processor, scraper, etc.) will be assigned
-# the MagicMock objects defined above.
-from app import app as flask_app
+# Now import the Flask app. The initialize_agent call in app.py will use the mock.
+from app import app as flask_app 
 
 @pytest.fixture
 def app_fixture():
     """Create and configure a new app instance for each test."""
     flask_app.config.update({
         "TESTING": True,
-        "SECRET_KEY": "test_secret_key_for_pytest" # Set a secret key for session testing
+        # SECRET_KEY is not strictly needed anymore for /api/query as session isn't used for context,
+        # but good to keep if other parts of Flask or extensions might use sessions.
+        "SECRET_KEY": "test_secret_key_for_pytest_api" 
     })
-    # Stop the global patcher when tests are done if necessary,
-    # though for pytest, it usually handles cleanup.
-    # If issues arise, pytest_sessionfinish or a finalizer fixture could stop it.
     yield flask_app
-    # patcher.stop() # Uncomment if issues with patch persisting across test files/sessions
 
 @pytest.fixture
 def client(app_fixture):
     """A test client for the app."""
     return app_fixture.test_client()
 
-def test_home_get(client):
-    """Test GET request to the home page."""
+def test_home_get_api_running(client):
+    """Test GET request to the root path '/'."""
     response = client.get('/')
     assert response.status_code == 200
-    response_data = response.data.decode()
-    assert "<h1>Amazon Shopping Assistant</h1>" in response_data
-    assert '<form action="/" method="post">' in response_data
-    assert 'name="query"' in response_data
-    assert "Summary of results will appear here..." in response_data
+    assert response.content_type == 'application/json'
+    expected_data = {"message": "Backend API is running"}
+    assert response.json == expected_data
 
-# Patch 'app.process_query' which is 'src.agent.process_query' imported into app.py
-# This is because the 'home' function in app.py calls 'process_query' directly.
+# Patch 'app.process_query' which is 'src.agent.process_query' imported into app.py's scope.
 @patch('app.process_query')
-def test_home_post_with_results(mock_process_query_in_app, client):
-    """Test POST request to the home page when process_query returns results."""
+def test_api_query_with_results(mock_process_query_in_app, client):
+    """Test POST to /api/query when process_query returns results."""
     mock_ranked_products = [
-        {
-            'title': 'Test Product 1', 
-            'price': '19.99', 
-            'price_per_count': '1.99/oz', 
-            'url': 'http://example.com/product1', 
-            'ranking_explanation': 'It is a test product.'
-        }
+        {'title': 'API Test Product 1', 'price': '29.99', 'url': 'http://api.example.com/p1'}
     ]
-    mock_summary_text = "This is a test summary."
-    mock_new_context = {"key": "value"}
+    mock_summary_text = "API test summary for product 1."
+    mock_new_context = {"api_context_key": "api_value1"}
     
     mock_process_query_in_app.return_value = (mock_ranked_products, mock_summary_text, mock_new_context)
 
-    response = client.post('/', data={'query': 'test query'})
-    assert response.status_code == 200
-    response_data = response.data.decode()
-
-    assert "<h1>Amazon Shopping Assistant</h1>" in response_data
-    assert 'value="test query"' in response_data
-    assert "This is a test summary." in response_data # This comes from format_summary(mock_summary_text)
-    assert "Test Product 1" in response_data
-    assert "$19.99" in response_data
-    assert "(Unit Price: 1.99/oz)" in response_data
-    assert 'href="http://example.com/product1"' in response_data
-    assert "It is a test product." in response_data
+    payload = {
+        "user_input": "api test query",
+        "previous_context": {"initial_api_context": "data"}
+    }
+    response = client.post('/api/query', data=json.dumps(payload), content_type='application/json')
     
-    # Assert that the globally mocked graph_app (from initialize_agent mock) and others
-    # were passed to the (also mocked) process_query.
+    assert response.status_code == 200
+    assert response.content_type == 'application/json'
+    
+    response_data = response.json
+    assert response_data["products"] == mock_ranked_products
+    assert response_data["summary"] == mock_summary_text
+    assert response_data["new_context"] == mock_new_context
+    
     mock_process_query_in_app.assert_called_once_with(
-        mock_graph_app,          # from the mocked initialize_agent
-        mock_nlp_processor,      # from the mocked initialize_agent
-        mock_scraper,            # from the mocked initialize_agent
-        mock_rate_limiter,       # from the mocked initialize_agent
-        'test query',            # user_input
-        {}                       # previous_context (empty for first request in session)
+        mock_graph_app_global,      # from the globally mocked initialize_agent
+        mock_nlp_processor_global,
+        mock_scraper_global,
+        mock_rate_limiter_global,
+        payload["user_input"],
+        payload["previous_context"]
     )
 
 @patch('app.process_query')
-def test_home_post_no_results(mock_process_query_in_app, client):
-    """Test POST request to the home page when process_query returns no results."""
-    mock_process_query_in_app.return_value = ([], None, {})
+def test_api_query_no_results(mock_process_query_in_app, client):
+    """Test POST to /api/query when process_query returns no results."""
+    mock_process_query_in_app.return_value = ([], None, {"empty_results_context": True})
 
-    response = client.post('/', data={'query': 'empty search'})
+    payload = {"user_input": "query yielding no results", "previous_context": {}}
+    response = client.post('/api/query', json=payload) # Using json=payload automatically sets content_type
+
     assert response.status_code == 200
-    response_data = response.data.decode()
-
-    assert "<h1>Amazon Shopping Assistant</h1>" in response_data
-    assert 'value="empty search"' in response_data
-    assert "No summary available." in response_data
-    assert "No products found for your query." in response_data
+    assert response.content_type == 'application/json'
     
+    response_data = response.json
+    assert response_data["products"] == []
+    assert response_data["summary"] is None
+    assert response_data["new_context"] == {"empty_results_context": True}
+
     mock_process_query_in_app.assert_called_once_with(
-        mock_graph_app, mock_nlp_processor, mock_scraper, mock_rate_limiter,
-        'empty search', {}
+        mock_graph_app_global, mock_nlp_processor_global, mock_scraper_global, mock_rate_limiter_global,
+        payload["user_input"], payload["previous_context"]
     )
 
 @patch('app.process_query')
-def test_home_post_context_management(mock_process_query_in_app, client):
-    """Test that context is managed across POST requests via session."""
-    mock_new_context_first_call = {"query": "first query", "results_count": 1}
-    
-    # Configure side_effect for multiple calls if needed, or just reconfigure return_value
-    mock_process_query_in_app.return_value = (
-        [{'title': 'Product A', 'price': '10', 'url': 'urlA', 'ranking_explanation': 'explA'}],
-        "Summary A",
-        mock_new_context_first_call
+def test_api_query_context_passing(mock_process_query_in_app, client):
+    """Test that previous_context is correctly passed to process_query."""
+    initial_context = {"session_id": "123", "filter": "electronics"}
+    payload = {"user_input": "find a laptop", "previous_context": initial_context}
+
+    # Doesn't matter what process_query returns for this test, only that it's called correctly
+    mock_process_query_in_app.return_value = ([], None, {"new_mock_context": "value"}) 
+
+    client.post('/api/query', json=payload)
+
+    mock_process_query_in_app.assert_called_once_with(
+        mock_graph_app_global, mock_nlp_processor_global, mock_scraper_global, mock_rate_limiter_global,
+        payload["user_input"], 
+        initial_context # Crucial check: was the provided context passed?
     )
 
-    # First POST
-    client.post('/', data={'query': 'first query'})
+def test_api_query_missing_user_input(client):
+    """Test POST to /api/query with missing user_input."""
+    payload = {"previous_context": {}} # Missing user_input
+    response = client.post('/api/query', json=payload)
+
+    assert response.status_code == 400
+    assert response.content_type == 'application/json'
+    assert "error" in response.json
+    assert response.json["error"] == "user_input is required"
+
+def test_api_query_invalid_json_payload(client):
+    """Test POST to /api/query with an invalid JSON payload."""
+    response = client.post('/api/query', data="not a valid json", content_type='application/json')
     
-    mock_process_query_in_app.assert_called_with(
-        mock_graph_app, mock_nlp_processor, mock_scraper, mock_rate_limiter,
-        'first query', {} 
+    assert response.status_code == 400
+    assert response.content_type == 'application/json'
+    assert "error" in response.json 
+    # The exact error message for invalid JSON can vary depending on Flask version
+    # It might be "Invalid JSON payload" (custom) or Flask's default.
+    # For now, checking for "error" key is a good start.
+    # Example Flask error: "Failed to decode JSON object: Expecting value: line 1 column 1 (char 0)"
+
+def test_api_query_empty_json_payload(client):
+    """Test POST to /api/query with an empty JSON payload {}."""
+    response = client.post('/api/query', json={})
+    
+    assert response.status_code == 400 # Because user_input is required
+    assert response.content_type == 'application/json'
+    assert "error" in response.json
+    assert response.json["error"] == "user_input is required"
+
+def test_api_query_default_previous_context(mock_process_query_in_app, client):
+    """Test that previous_context defaults to {} if not provided."""
+    payload = {"user_input": "a query without context"}
+    # previous_context is omitted from payload
+
+    mock_process_query_in_app.return_value = ([], None, {}) 
+    client.post('/api/query', json=payload)
+
+    mock_process_query_in_app.assert_called_once_with(
+        mock_graph_app_global, mock_nlp_processor_global, mock_scraper_global, mock_rate_limiter_global,
+        payload["user_input"], 
+        {} # Crucial check: was previous_context defaulted to {}?
     )
 
-    # Setup mock for second call
-    mock_new_context_second_call = {"query": "second query", "results_count": 2}
-    mock_process_query_in_app.return_value = ( # Reconfigure for the second call
-        [{'title': 'Product B', 'price': '20', 'url': 'urlB', 'ranking_explanation': 'explB'}],
-        "Summary B",
-        mock_new_context_second_call
-    )
-    
-    # Second POST
-    client.post('/', data={'query': 'second query'})
-    
-    assert mock_process_query_in_app.call_count == 2
-    mock_process_query_in_app.assert_called_with(
-        mock_graph_app, mock_nlp_processor, mock_scraper, mock_rate_limiter,
-        'second query', mock_new_context_first_call # previous_context is from first call's new_context
-    )
 
-@patch('app.process_query') # Patch for the initial POST
-def test_home_get_clears_context(mock_process_query_post, client):
-    """Test that a GET request clears the previous_context from session."""
-    # Simulate a POST request first to populate session
-    mock_process_query_post.return_value = ([], "Initial Summary", {"some_key": "some_value"})
-    client.post('/', data={'query': 'initial query'})
-    
-    # Now perform a GET request
-    response = client.get('/')
-    assert response.status_code == 200
-    
-    # To verify context is cleared, make another POST and check the context passed to process_query
-    with patch('app.process_query') as mock_process_query_after_get: # New patch for this specific call
-        mock_process_query_after_get.return_value = ([], "Next Summary", {})
-        client.post('/', data={'query': 'next query'})
-        
-        mock_process_query_after_get.assert_called_once_with(
-            mock_graph_app, mock_nlp_processor, mock_scraper, mock_rate_limiter,
-            'next query', {} # previous_context for 'next query' should be empty
-        )
-
-# If you started a global patcher and need to stop it:
-# @pytest.fixture(scope="session", autouse=True)
-# def stop_global_patch():
-#     yield
-#     patcher.stop() # This stops the patcher started at the beginning of the file
-# This is generally good practice if the patcher isn't managed by pytest's fixture system.
-# However, for `patch()` started with `patcher.start()`, it should ideally be stopped.
-# A cleaner way for pytest is to use fixtures that manage the patch's lifecycle.
-# For now, this explicit start/stop (if needed) will do.
-# Given pytest's test isolation, it might not be strictly necessary for this single test file.
-# Let's add a session-scoped autouse fixture to stop the patcher after all tests.
-
+# Fixture to stop the global patcher after the test session.
 @pytest.fixture(scope="session", autouse=True)
-def cleanup_global_patch(request):
-    """Stop the global patcher after the test session."""
+def cleanup_global_patcher_initialize_agent(request):
+    """Stop the global patcher_initialize_agent after the test session."""
     def fin():
-        patcher.stop()
+        patcher_initialize_agent.stop()
     request.addfinalizer(fin)
