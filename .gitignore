@@ -32,3 +32,6 @@ chromedriver.log
 
 # macOS metadata
 .DS_Store
+
+# Vite
+.vite/
