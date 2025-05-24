@@ -109,7 +109,12 @@ The frontend provides the user interface in your browser.
     ```bash
     cd frontend
     npm install
+    npm install -D tailwindcss@3.4.1 postcss autoprefixer
     ```
+-   **Tailwind CSS Setup**: The project uses Tailwind CSS for styling. The configuration is already set up in:
+    - `tailwind.config.js` - Contains custom theme settings and content paths
+    - `postcss.config.js` - Configures PostCSS with Tailwind CSS and Autoprefixer
+    - `src/index.css` - Includes Tailwind directives (@tailwind base, components, utilities)
 -   **Running the Frontend Development Server**:
     ```bash
     npm run dev
