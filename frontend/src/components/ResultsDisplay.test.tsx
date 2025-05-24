@@ -33,16 +33,8 @@ describe('ResultsDisplay Component', () => {
     expect(screen.getByRole('link', { name: /product 2/i })).toHaveAttribute('href', 'http://example.com/product2');
     
     // Ensure elements not present for Product 2 are not rendered
-    // This is implicitly tested by not finding them, but can be made explicit if desired
-    // For example, queryByText for Product 2's explanation should be null.
-    const product2Explanation = screen.queryByText((content, element) => {
-        // Try to find an explanation specifically for Product 2 if structure allows,
-        // or ensure no unexpected explanation appears.
-        // This is a bit tricky without more specific selectors within the component.
-        // For now, we rely on the structure from the component.
-        return false; // Placeholder for a more specific query if needed
-    });
-    // expect(product2Explanation).not.toBeInTheDocument(); // This depends on how you'd query this absence
+    // This is implicitly tested by not finding them.
+    // The test 'does not render explanation or unit price if not provided' also covers this.
   });
 
   test('renders product titles as links', () => {

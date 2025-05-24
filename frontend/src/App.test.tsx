@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event'; // For more complex user interactions
 import App from './App'; // Corrected path: App.tsx is in src/ alongside App.test.tsx
 import { vi } from 'vitest'; // Vitest's mocking utility
@@ -48,8 +48,20 @@ describe('App Component Integration Tests', () => {
     // The exact check for loading state might depend on how it's implemented.
     // For example, if the button text changes to "Searching..."
     // expect(screen.getByRole('button', { name: /searching.../i })).toBeInTheDocument(); 
-    // QueryInput shows spinner, so text is empty
-    expect(screen.getByRole('button', { name: ''})).toBeInTheDocument();
+    // QueryInput shows spinner. Check if the button is disabled (indicating loading)
+    // and then check if the spinner SVG is present.
+    // After click, the button's content changes to an SVG.
+    // We expect it to be disabled.
+    // Find the button (it should be the only one in this part of the form)
+    // and assert its state *after* the click action has settled.
+    // userEvent.click is async and waits for DOM updates.
+    
+    // The button should be disabled, and its accessible name might change (or become empty)
+    // because the text "Search" is replaced by an SVG.
+    // We can find it by its current state (disabled) or by its role if it's unique.
+    // Let's assume it's the primary button we're interacting with.
+    expect(submitButton).toBeDisabled(); // Check the original reference
+    expect(submitButton.querySelector('svg.animate-spin')).toBeInTheDocument();
 
 
     // Wait for the API call to resolve and UI to update
@@ -107,12 +119,16 @@ describe('App Component Integration Tests', () => {
     await user.click(submitButton);
 
     // Wait for error message to be displayed
-    expect(await screen.findByText(`Error: ${errorMessage}`)).toBeInTheDocument();
+    // Check for the "Error" heading and the message paragraph separately
+    expect(await screen.findByRole('heading', { name: /error/i, level: 2 })).toBeInTheDocument();
+    expect(await screen.findByText(errorMessage)).toBeInTheDocument();
     expect(await screen.findByText(/"status": 500/i)).toBeInTheDocument(); // Check for details
 
     // Ensure product and summary areas are cleared or show appropriate messages
+    // In case of an API error, these sections should not display their usual "empty" messages,
+    // as the error section takes precedence.
     expect(screen.queryByText(/loading results.../i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/no products found/i)).toBeInTheDocument(); // Or whatever App.tsx renders on error for products
-    expect(screen.queryByText(/no summary available/i)).toBeInTheDocument(); // Or for summary
+    expect(screen.queryByText(/no products found. try a different search!/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no summary available for the current results./i)).not.toBeInTheDocument();
   });
 });
