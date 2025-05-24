@@ -1,12 +1,5 @@
 import React from 'react';
-
-interface Product {
-  title: string;
-  price: string | number;
-  url: string;
-  ranking_explanation?: string; 
-  price_per_count?: string; 
-}
+import { Product } from '../../services/api';
 
 interface ResultsDisplayProps {
   products: Product[];

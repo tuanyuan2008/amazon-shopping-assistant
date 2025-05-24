@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
 import QueryInput from './components/QueryInput';
-import ResultsDisplay from './components/ResultsDisplay';
+import ResultsDisplay from './components/ResultsDisplay'; // Uncommented
 import SummaryDisplay from './components/SummaryDisplay';
-import { fetchQueryResults, Product as ApiProduct, ApiError } from './services/api';
+import * as ApiService from './services/api'; // Use namespace import
 import './App.css'; // Keep for any global non-Tailwind overrides or specific component styles if needed
 
-// Product type for App.tsx state
-interface Product extends ApiProduct {}
+// Removed local Product interface alias:
+// interface Product extends ApiProduct {}
 
 function App() {
   const [currentQuery, setCurrentQuery] = useState<string>('');
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<ApiService.Product[]>([]); // Uncommented and using ApiService.Product
   const [summary, setSummary] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<ApiError | null>(null);
+  const [error, setError] = useState<ApiService.ApiError | null>(null); // Updated type
   const [previousContext, setPreviousContext] = useState<Record<string, any>>({});
 
   const handleSubmitQuery = async () => {
@@ -27,15 +27,15 @@ function App() {
     setError(null); 
 
     try {
-      const apiResponse = await fetchQueryResults(currentQuery, previousContext);
-      setProducts(apiResponse.products);
+      const apiResponse = await ApiService.fetchQueryResults(currentQuery, previousContext); // Updated call
+      setProducts(apiResponse.products); // Uncommented
       setSummary(apiResponse.summary);
       setPreviousContext(apiResponse.new_context);
     } catch (err) {
       console.error('API Error:', err);
-      const apiErr = err as ApiError; 
+      const apiErr = err as ApiService.ApiError; // Updated type assertion
       setError({ message: apiErr.message || 'An unexpected error occurred.' , details: apiErr.details });
-      setProducts([]); 
+      setProducts([]); // Uncommented
       setSummary(null);  
     } finally {
       setIsLoading(false);
@@ -72,18 +72,18 @@ function App() {
           </section>
         )}
 
-        {!error && (isLoading || products.length > 0 || summary) && (
+        {!error && (isLoading || products.length > 0 || summary) && ( // Condition restored
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <section className="summary-section md:col-span-1 p-6 bg-white rounded-lg shadow-lg">
               <SummaryDisplay summary={summary} isLoading={isLoading && !summary} />
             </section>
             <section className="results-section md:col-span-2 p-6 bg-white rounded-lg shadow-lg">
               <ResultsDisplay products={products} isLoading={isLoading && products.length === 0} />
-            </section>
+            </section> 
           </div>
         )}
         
-        {!error && !isLoading && products.length === 0 && !summary && (
+        {!error && !isLoading && products.length === 0 && !summary && ( // Condition restored
              <div className="text-center p-6 bg-white rounded-lg shadow-lg">
                 <p className="text-slate-500 text-lg">Enter a query above to start searching!</p>
             </div>
