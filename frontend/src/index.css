@@ -6,6 +6,20 @@ body {
   background: linear-gradient(135deg, #b2f0e6 0%, #e0c3fc 100%);
   /* Artistic, soft gradient */
   color: #22292f;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.18;
+  background: url('data:image/svg+xml;utf8,<svg width="600" height="600" viewBox="0 0 600 600" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="200" cy="200" rx="180" ry="120" fill="%23b2f0e6"/><ellipse cx="400" cy="400" rx="160" ry="100" fill="%23e0c3fc"/><ellipse cx="500" cy="100" rx="80" ry="60" fill="%23b2f0e6"/></svg>');
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
 }
 
 @tailwind base;

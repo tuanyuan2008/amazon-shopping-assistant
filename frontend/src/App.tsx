@@ -85,14 +85,17 @@ function App() {
         )}
 
         {!isPreSearchState && !error && (isLoading || products.length > 0 || summary) && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <section className="summary-section md:col-span-1 p-6 bg-white rounded-xl shadow-lg">
+          <>
+            <section className="summary-section w-full max-w-3xl mx-auto mb-8">
               <SummaryDisplay summary={summary} isLoading={isLoading && !summary} />
             </section>
-            <section className="results-section md:col-span-2 p-6 bg-white rounded-xl shadow-lg">
+            <div className="w-full flex justify-center mb-8">
+              <div className="h-1 w-24 rounded-full bg-gradient-to-r from-baby-robin-blue/40 to-baby-robin-blue-dark/40 opacity-60"></div>
+            </div>
+            <section className="results-section w-full max-w-3xl mx-auto">
               <ResultsDisplay products={products} isLoading={isLoading && products.length === 0} />
-            </section> 
-          </div>
+            </section>
+          </>
         )}
         
         {!isPreSearchState && !error && !isLoading && products.length === 0 && !summary && (
