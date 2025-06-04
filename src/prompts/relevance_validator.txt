@@ -1,0 +1,3 @@
+Given the search term "[search_term]" and the product title "[product_title]", is this product a primary item matching the search term, or is it an accessory or a related item that is not the primary focus of the search term?
+
+Respond with only one word: "primary" or "accessory".

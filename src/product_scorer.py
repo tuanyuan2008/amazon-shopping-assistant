@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 from scipy.special import expit
 from scipy.stats import percentileofscore
-from .constants import MISSING_SCORE
+from .constants import MISSING_SCORE, ACCESSORY_PENALTY_FACTOR
 from .date_handler import DateHandler
 
 if TYPE_CHECKING:
@@ -81,38 +81,61 @@ class ProductScorer:
             return None
 
     def _calculate_preference_score(self, product: Dict, preferences: Dict, search_term: str) -> Tuple[float, str]:
-        """Calculate how well the product matches user preferences."""
-        product_title = product.get('title', '').lower()
-        features = preferences.get('features', [])
-        preference_tokens = [f.strip().lower() for f in features] if features else []
+        product_title_lower = product.get('title', '').lower() # Use lower for local matching
+        original_product_title = product.get('title', '') # Keep original case for LLM
 
-        if not preference_tokens:
-            return MISSING_SCORE, f"Preference score: {MISSING_SCORE} (no preferences to match)"
+        features = preferences.get('features', [])
+        # Primary search term should also be considered a key feature for relevance
+        # Use set to avoid duplicate processing if search_term is also in features
+        relevant_terms_for_matching = set([f.strip().lower() for f in features if f])
+        if search_term:
+            relevant_terms_for_matching.add(search_term.strip().lower())
+
+        if not relevant_terms_for_matching:
+            return MISSING_SCORE, f"Preference score: {MISSING_SCORE} (no preferences or search term to match)"
 
         matched_tokens = []
-        missing_tokens = []
-        
-        for token in preference_tokens:
-            if token in product_title:
-                matched_tokens.append(token)
-            else:
-                missing_tokens.append(token)
-        
-        match_percentage = len(matched_tokens) / len(preference_tokens)
-        
-        explanation = f"Preference score: {match_percentage:.2f} (matched {len(matched_tokens)}/{len(preference_tokens)} features)"
-        if missing_tokens:
-            explanation += f", missing: {', '.join(missing_tokens)}"
+        missing_tokens = list(relevant_terms_for_matching) # Start with all terms as missing
 
-        # Placeholder for LLM validation call
-        if 0 < match_percentage < 1.0: # Example condition for ambiguity
-            if self.nlp_processor: # Check if nlp_processor is set
-                self.logger.info(f"LLM Val Placeholder: Title='{product_title}', Search='{search_term}', CurrentMatch={match_percentage:.2f}. Would call LLM.")
-                # In a future step, this will call:
-                # relevance = self.nlp_processor._validate_product_relevance_with_llm(product_title, search_term, preference_tokens)
-                # And then adjust score based on relevance
-            else:
-                self.logger.warning("NLPProcessor not available for LLM validation in ProductScorer.")
+        for term in list(relevant_terms_for_matching): # Iterate over a copy for safe removal
+            if term in product_title_lower: # product_title_lower for matching
+                matched_tokens.append(term)
+                if term in missing_tokens: # Should always be true here
+                    missing_tokens.remove(term)
+        
+        if not relevant_terms_for_matching: # Should not happen if initial check passed, but for safety
+             match_percentage = 0.0
+        else:
+            match_percentage = len(matched_tokens) / len(relevant_terms_for_matching)
+        
+        explanation_details = []
+        if matched_tokens:
+            explanation_details.append(f"Matched: {', '.join(matched_tokens)}")
+        if missing_tokens:
+            explanation_details.append(f"Missing: {', '.join(missing_tokens)}")
+
+        explanation = f"Preference score: {match_percentage:.2f} ({'; '.join(explanation_details) if explanation_details else 'No specific token matches'})"
+
+        # LLM Validation Call
+        # Condition: Call if there's some initial match and we have a search term to validate against.
+        # And also ensure we have an NLP processor instance.
+        if match_percentage > 0 and search_term and self.nlp_processor:
+            # Use original case title for LLM for potentially better understanding by the model
+            relevance_status = self.nlp_processor._validate_product_relevance_with_llm(original_product_title, search_term)
+
+            if relevance_status == "accessory":
+                original_score = match_percentage
+                match_percentage *= ACCESSORY_PENALTY_FACTOR  # Penalty factor for accessories
+                self.logger.info(f"LLM classified '{original_product_title}' as ACCESSORY for search '{search_term}'. Score reduced from {original_score:.2f} to {match_percentage:.2f}.")
+                explanation += f" (LLM: accessory, score reduced from {original_score:.2f})"
+            elif relevance_status == "unknown":
+                self.logger.warning(f"LLM validation for '{original_product_title}' (search: '{search_term}') was UNKNOWN. Score not adjusted.")
+                explanation += " (LLM: validation inconclusive)"
+            else: # "primary" or other
+                self.logger.info(f"LLM classified '{original_product_title}' as PRIMARY for search '{search_term}'. Score not adjusted based on this classification.")
+                explanation += " (LLM: primary)"
+        elif not self.nlp_processor and match_percentage > 0 and search_term:
+            self.logger.warning("NLPProcessor not available for LLM validation in ProductScorer. Skipping.")
 
         return match_percentage, explanation
 

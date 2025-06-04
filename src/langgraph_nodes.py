@@ -25,10 +25,12 @@ def search_amazon(state: dict) -> dict:
 def rank_products(state: dict) -> dict:
     nlp = state["nlp_processor"]
     parsed_query = state["parsed_query"]
+    search_term = parsed_query["search_term"] # Extract search_term
     ranked = nlp.rank_products(
         products=state["products"],
         filters=parsed_query["filters"],
-        preferences=parsed_query["preferences"]
+        preferences=parsed_query["preferences"],
+        search_term=search_term # Pass it here
     )
     return {
         **state,

@@ -92,3 +92,38 @@ class NLPProcessor:
     def rank_products(self, products: List[Dict], filters: Dict, preferences: Dict, search_term: str) -> List[Dict]:
         """Rank products using the ProductScorer, passing the search term for context."""
         return self.product_scorer.rank_products(products, filters, preferences, search_term)
+
+    def _validate_product_relevance_with_llm(self, product_title: str, search_term: str) -> str:
+        """
+        Uses an LLM to validate if a product title is a primary match for a search term
+        or merely an accessory.
+        Returns "primary", "accessory", or "unknown" in case of error or unexpected response.
+        """
+        try:
+            prompt_template = (self.prompt_dir / 'relevance_validator.txt').read_text()
+            prompt = prompt_template.replace("[search_term]", search_term).replace("[product_title]", product_title)
+
+            self.logger.info(f"Validating relevance for title: '{product_title}' with search term: '{search_term}'")
+
+            response = openai.chat.completions.create(
+                model="gpt-3.5-turbo", # Or another preferred model
+                messages=[
+                    {"role": "system", "content": "You are a precise classification assistant. Respond with only 'primary' or 'accessory'."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0,
+                max_tokens=5  # Expecting a very short response
+            )
+
+            llm_response = response.choices[0].message.content.strip().lower()
+            self.logger.info(f"LLM relevance validation response: '{llm_response}'")
+
+            if llm_response == "primary" or llm_response == "accessory":
+                return llm_response
+            else:
+                self.logger.warning(f"Unexpected LLM response for relevance validation: '{llm_response}'. Defaulting to 'unknown'.")
+                return "unknown" # Fallback for unexpected responses
+
+        except Exception as e:
+            self.logger.error(f"Error during LLM relevance validation: {e}", exc_info=True)
+            return "unknown" # Fallback in case of any error

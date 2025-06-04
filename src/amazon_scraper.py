@@ -29,41 +29,66 @@ class AmazonScraper:
         self.playwright: Optional[Playwright] = None
         self.browser: Optional[Browser] = None
         self.driver: Optional[Page] = None  # This is now a Playwright Page
-        self._initialize_driver()
+        # DO NOT CALL _initialize_driver() or _ensure_playwright_setup() here
 
-    def _initialize_driver(self) -> None:
-        """Initialize Playwright, launch browser, and create a new page."""
-        self.playwright = sync_playwright().start()
+    def _ensure_playwright_setup(self) -> None:
+        """Initialize Playwright, launch browser, and create a new page if not already done."""
+        if self.driver:
+            self.logger.info("Playwright setup already complete. Skipping re-initialization.")
+            return
 
-        chromium_args = [
-            "--disable-blink-features=AutomationControlled"
-        ]
-        # Add other args if deemed necessary, but Playwright is often more stealthy by default
+        self.logger.info("Performing Playwright setup...")
+        try:
+            self.playwright = sync_playwright().start()
 
-        if platform.system() == "Darwin":
-            try:
-                self.logger.info("Attempting to launch Playwright WebKit (Safari)...")
-                self.browser = self.playwright.webkit.launch(headless=self.config.HEADLESS_MODE)
-                # Note: Headless for WebKit might have limitations/warnings.
-                if self.config.HEADLESS_MODE:
-                    self.logger.warning("Running WebKit in headless mode. Behavior may differ from headed Safari.")
-            except Exception as e:
-                self.logger.warning(f"Playwright WebKit (Safari) setup failed: {e}. Falling back to Chromium.")
+            chromium_args = [
+                "--disable-blink-features=AutomationControlled"
+            ]
+
+            if platform.system() == "Darwin":
+                try:
+                    self.logger.info("Attempting to launch Playwright WebKit (Safari)...")
+                    self.browser = self.playwright.webkit.launch(headless=self.config.HEADLESS_MODE)
+                    if self.config.HEADLESS_MODE:
+                        self.logger.warning("Running WebKit in headless mode. Behavior may differ from headed Safari.")
+                except Exception as e:
+                    self.logger.warning(f"Playwright WebKit (Safari) setup failed: {e}. Falling back to Chromium.")
+                    if not self.playwright: # Should not happen if first try block succeeded. Safety.
+                        self.playwright = sync_playwright().start()
+                    self.logger.info("Launching Playwright Chromium...") # Consistent log message
+                    self.browser = self.playwright.chromium.launch(
+                        headless=self.config.HEADLESS_MODE,
+                        args=chromium_args
+                    )
+            else:
+                self.logger.info("Launching Playwright Chromium...")
                 self.browser = self.playwright.chromium.launch(
                     headless=self.config.HEADLESS_MODE,
                     args=chromium_args
                 )
-        else:
-            self.logger.info("Launching Playwright Chromium...")
-            self.browser = self.playwright.chromium.launch(
-                headless=self.config.HEADLESS_MODE,
-                args=chromium_args
-            )
 
-        user_agent = self.config.USER_AGENT if self.config.USER_AGENT else None
-        self.driver = self.browser.new_page(user_agent=user_agent)
-        # Apply stealth script
-        self.driver.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            user_agent = self.config.USER_AGENT if self.config.USER_AGENT else None
+            self.driver = self.browser.new_page(user_agent=user_agent)
+            self.driver.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            self.logger.info("Playwright setup complete.")
+
+        except Exception as e:
+            self.logger.error(f"Error during Playwright setup: {e}", exc_info=True)
+            # Ensure cleanup if partial setup occurred
+            if self.browser:
+                try:
+                    self.browser.close()
+                except Exception as close_e:
+                    self.logger.error(f"Error closing browser during setup failure: {close_e}")
+            if self.playwright:
+                try:
+                    self.playwright.stop()
+                except Exception as stop_e:
+                    self.logger.error(f"Error stopping Playwright during setup failure: {stop_e}")
+            self.playwright = None
+            self.browser = None
+            self.driver = None
+            raise # Re-raise the exception to signal failure to the caller
 
     def _get_page_results(self, page: int, first_url: Optional[str] = None) -> List[Dict]:
         """Get results from the current page."""
@@ -103,6 +128,12 @@ class AmazonScraper:
 
     def search_products(self, query: str, filters: Dict, max_results: int = 100) -> List[Dict]:
         """Search Amazon for products using a keyword and filter dict."""
+        self._ensure_playwright_setup() # Ensure driver is ready
+
+        if not self.driver:
+            self.logger.error("Playwright driver not initialized. Cannot perform search.")
+            return []
+
         try:
             url = self._construct_search_url(query, filters)
             self.logger.info(f"Searching Amazon: {url}")
@@ -334,3 +365,7 @@ class AmazonScraper:
             except Exception as e:
                 self.logger.warning(f"Error stopping Playwright: {e}")
         self.logger.info("Playwright resources closed.")
+        # Reset state to allow potential re-initialization if the instance is reused
+        self.driver = None
+        self.browser = None
+        self.playwright = None
