@@ -21,7 +21,7 @@ class NLPProcessor:
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
         self.date_handler = DateHandler()
-        self.product_scorer = ProductScorer()
+        self.product_scorer = ProductScorer(nlp_processor=self) # Pass self
         self.prompt_dir = Path(__file__).parent / 'prompts'
 
     def _get_parser_prompt(self, is_follow_up: bool = False) -> str:
@@ -89,6 +89,6 @@ class NLPProcessor:
             self.logger.error(f"Error parsing follow-up query: {e}")
             raise
 
-    def rank_products(self, products: List[Dict], filters: Dict, preferences: Dict) -> List[Dict]:
-        """Rank products using the ProductScorer."""
-        return self.product_scorer.rank_products(products, filters, preferences)
+    def rank_products(self, products: List[Dict], filters: Dict, preferences: Dict, search_term: str) -> List[Dict]:
+        """Rank products using the ProductScorer, passing the search term for context."""
+        return self.product_scorer.rank_products(products, filters, preferences, search_term)

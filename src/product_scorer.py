@@ -1,14 +1,17 @@
 import logging
 import math
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 from scipy.special import expit
 from scipy.stats import percentileofscore
 from .constants import MISSING_SCORE
 from .date_handler import DateHandler
 
+if TYPE_CHECKING:
+    from .nlp_processor import NLPProcessor # Forward declaration for type hint
+
 class ProductScorer:
-    def __init__(self):
+    def __init__(self, nlp_processor: 'Optional[NLPProcessor]' = None):
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.INFO)
         if not self.logger.handlers:
@@ -17,14 +20,15 @@ class ProductScorer:
             formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
+        self.nlp_processor = nlp_processor
         self.date_handler = DateHandler()
 
-    def rank_products(self, products: List[Dict], filters: Dict, preferences: Dict) -> List[Dict]:
+    def rank_products(self, products: List[Dict], filters: Dict, preferences: Dict, search_term: str) -> List[Dict]:
         """Rank products based on filters and preferences."""
         scored = []
         all_non_positive_scores = True  # Start assuming all scores are non-positive
         for product in products:
-            score, explanation = self._calculate_product_score(product, filters, preferences, products)
+            score, explanation = self._calculate_product_score(product, filters, preferences, products, search_term)
             scored.append({
                 **product,
                 "score": score,
@@ -40,11 +44,12 @@ class ProductScorer:
         product: Dict, 
         filters: Dict, 
         preferences: Dict, 
-        all_products: List[Dict]
+        all_products: List[Dict],
+        search_term: str  # New parameter
     ) -> Tuple[float, str]:
         """Calculate the overall score for a product."""
         components = {
-            "preference": self._calculate_preference_score(product, preferences),
+            "preference": self._calculate_preference_score(product, preferences, search_term), # Pass search_term
             "price": self._calculate_price_score(product, filters, all_products),
             "rating": self._calculate_rating_score(product, filters),
             "reviews": self._calculate_review_score(product, filters),
@@ -75,7 +80,7 @@ class ProductScorer:
         except (ValueError, AttributeError):
             return None
 
-    def _calculate_preference_score(self, product: Dict, preferences: Dict) -> Tuple[float, str]:
+    def _calculate_preference_score(self, product: Dict, preferences: Dict, search_term: str) -> Tuple[float, str]:
         """Calculate how well the product matches user preferences."""
         product_title = product.get('title', '').lower()
         features = preferences.get('features', [])
@@ -98,6 +103,16 @@ class ProductScorer:
         explanation = f"Preference score: {match_percentage:.2f} (matched {len(matched_tokens)}/{len(preference_tokens)} features)"
         if missing_tokens:
             explanation += f", missing: {', '.join(missing_tokens)}"
+
+        # Placeholder for LLM validation call
+        if 0 < match_percentage < 1.0: # Example condition for ambiguity
+            if self.nlp_processor: # Check if nlp_processor is set
+                self.logger.info(f"LLM Val Placeholder: Title='{product_title}', Search='{search_term}', CurrentMatch={match_percentage:.2f}. Would call LLM.")
+                # In a future step, this will call:
+                # relevance = self.nlp_processor._validate_product_relevance_with_llm(product_title, search_term, preference_tokens)
+                # And then adjust score based on relevance
+            else:
+                self.logger.warning("NLPProcessor not available for LLM validation in ProductScorer.")
 
         return match_percentage, explanation
 
