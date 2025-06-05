@@ -124,13 +124,11 @@ class NLPProcessor:
             prompt_template = (self.prompt_dir / 'relevance_validator.txt').read_text()
             prompt = prompt_template.replace("[search_term]", search_term).replace("[product_title]", product_title)
 
-            # self.logger.info(f"Validating relevance (yes/no) for title: '{product_title}' with search term: '{search_term}'")
-
             response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "You are a precise classification assistant. Respond with only 'yes' or 'no'."},
-                    {"role": "user", "content": prompt}
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": "Please classify the product. Respond with ONLY 'yes' or 'no'."}
                 ],
                 temperature=0,
                 max_tokens=3
@@ -165,8 +163,6 @@ class NLPProcessor:
         if not products_to_validate:
             return []
 
-        # self.logger.info(f"Starting LLM validation for top {len(products_to_validate)} products out of {len(products)} for search term: '{search_term}'")
-
         validated_products_with_llm_response = []
         max_workers = min(len(products_to_validate), 5)
 
@@ -187,7 +183,6 @@ class NLPProcessor:
                         "product": product_data,
                         "llm_decision": llm_decision
                     })
-                    # self.logger.info(f"LLM validation for '{product_data.get('title', '')}': {llm_decision}")
                 except Exception as exc:
                     self.logger.error(f"LLM validation for product '{product_data.get('title', '')}' generated an exception: {exc}", exc_info=True)
                     validated_products_with_llm_response.append({

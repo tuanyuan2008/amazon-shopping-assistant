@@ -40,8 +40,6 @@ def rank_products(state: dict) -> dict:
         "ranked_products": ranked
     }
 
-# from src.constants import TOP_N_FOR_LLM_VALIDATION # Removed from here
-
 def llm_filter_top_products(state: dict) -> dict:
     """
     Takes the ranked list of products, applies LLM validation to the top N,
