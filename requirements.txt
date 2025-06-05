@@ -1,19 +1,30 @@
-playwright
+# Core Dependencies
 openai==1.76.0
+pydantic==2.11.1
 python-dotenv==1.0.1
-beautifulsoup4==4.12.3
 requests==2.31.0
+
+# Web & Automation
+playwright==1.52.0
+beautifulsoup4==4.12.3
+Flask==3.1.1
+Flask-CORS==6.0.0
+
+# Data Processing
 pandas==2.2.1
 numpy==1.26.4
-pylint==3.3.4
-langgraph==0.4.1
+scipy==1.15.2
+
+# NLP & AI
 langchain>=0.1.16
 langchain-openai>=0.1.6
-pydantic==2.11.1
+langgraph==0.4.1
+nltk==3.8.1
+
+# Date Handling
 dateparser==1.2.1
 holidays==0.71
-nltk==3.8.1
-Flask
-pytest
-scipy
-Flask-CORS
+
+# Development & Testing
+pylint==3.3.4
+pytest==8.0.2
