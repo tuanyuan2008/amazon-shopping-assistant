@@ -1,3 +1,6 @@
+from typing import Dict, List # Added for type hints
+from src.constants import TOP_N_FOR_LLM_VALIDATION # Moved to top
+
 def parse_user_query(state: dict) -> dict:
     nlp = state["nlp_processor"]
     if state.get("previous_context"):
@@ -25,7 +28,7 @@ def search_amazon(state: dict) -> dict:
 def rank_products(state: dict) -> dict:
     nlp = state["nlp_processor"]
     parsed_query = state["parsed_query"]
-    search_term = parsed_query["search_term"] # Extract search_term
+    search_term = parsed_query["search_term"]
     ranked = nlp.rank_products(
         products=state["products"],
         filters=parsed_query["filters"],
@@ -37,7 +40,7 @@ def rank_products(state: dict) -> dict:
         "ranked_products": ranked
     }
 
-from src.constants import TOP_N_FOR_LLM_VALIDATION
+# from src.constants import TOP_N_FOR_LLM_VALIDATION # Removed from here
 
 def llm_filter_top_products(state: dict) -> dict:
     """

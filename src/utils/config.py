@@ -19,11 +19,7 @@ class Config:
         
         # Browser Configuration
         raw_headless_mode_env = os.getenv('HEADLESS_MODE', 'False')
-        # ---- START DEBUG LOGGING ----
-        print(f"[Config DEBUG] Raw HEADLESS_MODE from env: '{raw_headless_mode_env}' (Type: {type(raw_headless_mode_env)})")
-        # ---- END DEBUG LOGGING ----
         self.HEADLESS_MODE = raw_headless_mode_env.lower() == 'true'
-        print(f"[Config DEBUG] Parsed HEADLESS_MODE: {self.HEADLESS_MODE} (Type: {type(self.HEADLESS_MODE)})")
 
         self.USER_AGENT = os.getenv('USER_AGENT', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         

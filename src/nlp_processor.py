@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional # Optional might be needed for type hints
+from typing import Dict, List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import openai
 from .utils.config import Config
@@ -22,7 +22,7 @@ class NLPProcessor:
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
         self.date_handler = DateHandler()
-        self.product_scorer = ProductScorer(nlp_processor=self) # Pass self
+        self.product_scorer = ProductScorer(nlp_processor=self)
         self.prompt_dir = Path(__file__).parent / 'prompts'
 
     def _get_parser_prompt(self, is_follow_up: bool = False) -> str:
@@ -124,7 +124,7 @@ class NLPProcessor:
             prompt_template = (self.prompt_dir / 'relevance_validator.txt').read_text()
             prompt = prompt_template.replace("[search_term]", search_term).replace("[product_title]", product_title)
 
-            self.logger.info(f"Validating relevance (yes/no) for title: '{product_title}' with search term: '{search_term}'")
+            # self.logger.info(f"Validating relevance (yes/no) for title: '{product_title}' with search term: '{search_term}'")
 
             response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
@@ -137,7 +137,7 @@ class NLPProcessor:
             )
 
             llm_response = response.choices[0].message.content.strip().lower()
-            self.logger.info(f"LLM relevance (yes/no) validation response: '{llm_response}'")
+            # self.logger.info(f"LLM relevance (yes/no) validation response: '{llm_response}'")
 
             if llm_response == "yes" or llm_response == "no":
                 return llm_response
@@ -165,10 +165,9 @@ class NLPProcessor:
         if not products_to_validate:
             return []
 
-        self.logger.info(f"Starting LLM validation for top {len(products_to_validate)} products out of {len(products)} for search term: '{search_term}'")
+        # self.logger.info(f"Starting LLM validation for top {len(products_to_validate)} products out of {len(products)} for search term: '{search_term}'")
 
         validated_products_with_llm_response = []
-        # Determine max_workers for ThreadPoolExecutor
         max_workers = min(len(products_to_validate), 5)
 
         if max_workers == 0: # Should be caught by earlier products_to_validate check, but as safety.
@@ -188,7 +187,7 @@ class NLPProcessor:
                         "product": product_data,
                         "llm_decision": llm_decision
                     })
-                    self.logger.info(f"LLM validation for '{product_data.get('title', '')}': {llm_decision}")
+                    # self.logger.info(f"LLM validation for '{product_data.get('title', '')}': {llm_decision}")
                 except Exception as exc:
                     self.logger.error(f"LLM validation for product '{product_data.get('title', '')}' generated an exception: {exc}", exc_info=True)
                     validated_products_with_llm_response.append({

@@ -2,19 +2,17 @@ import pytest
 from unittest.mock import MagicMock
 
 from src.product_scorer import ProductScorer
-from src.nlp_processor import NLPProcessor # For type hint if ProductScorer takes it
+from src.nlp_processor import NLPProcessor
 from src.constants import ACCESSORY_PENALTY_FACTOR, MISSING_SCORE
 
 @pytest.fixture
 def mock_nlp_processor():
     processor = MagicMock(spec=NLPProcessor)
-    # Configure the mock's method directly, this is important for it to be recognized as a method
-    processor._validate_product_relevance_with_llm = MagicMock(return_value="primary") # Default return
+    processor._validate_product_relevance_with_llm = MagicMock(return_value="primary")
     return processor
 
 @pytest.fixture
 def product_scorer_with_nlp(mock_nlp_processor):
-    # ProductScorer is initialized with the mocked NLPProcessor
     scorer = ProductScorer(nlp_processor=mock_nlp_processor)
     return scorer
 
@@ -51,7 +49,7 @@ def product_scorer_no_nlp():
 
 ])
 def test_preference_score_llm_validation(
-    request, # Pytest request fixture to dynamically get other fixtures
+    request,
     scorer_fixture, product_title, search_term, preferences,
     llm_validation_return, initial_terms_matched, total_relevant_terms,
     expected_final_score_approx, expected_in_explanation, llm_should_be_called
@@ -60,22 +58,17 @@ def test_preference_score_llm_validation(
     product = {"title": product_title}
 
     if scorer.nlp_processor and hasattr(scorer.nlp_processor, '_validate_product_relevance_with_llm'):
-        # Ensure the mock method is set on the instance if it exists and is a mock
         scorer.nlp_processor._validate_product_relevance_with_llm.return_value = llm_validation_return
 
     calculated_score, explanation = scorer._calculate_preference_score(product, preferences, search_term)
 
-    # For this test, we directly assert the final score.
     assert calculated_score == pytest.approx(expected_final_score_approx, abs=0.01)
-
-    # Check explanation contains key phrases
     assert expected_in_explanation in explanation
 
-    # Verify LLM call status
     if scorer.nlp_processor and hasattr(scorer.nlp_processor, '_validate_product_relevance_with_llm'):
         if llm_should_be_called:
             scorer.nlp_processor._validate_product_relevance_with_llm.assert_called_with(product_title, search_term)
         else:
             scorer.nlp_processor._validate_product_relevance_with_llm.assert_not_called()
-    elif llm_should_be_called: # If LLM should have been called but there's no processor or method
+    elif llm_should_be_called:
         pytest.fail("LLM was expected to be called, but NLP processor or method is missing.")

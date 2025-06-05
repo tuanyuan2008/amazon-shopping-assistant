@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 from scipy.special import expit
 from scipy.stats import percentileofscore
-from .constants import MISSING_SCORE, MAX_LLM_VALIDATIONS_PER_RUN
+from .constants import MISSING_SCORE # MAX_LLM_VALIDATIONS_PER_RUN removed as it's not used here
 from .date_handler import DateHandler
 
 if TYPE_CHECKING:
@@ -61,6 +61,7 @@ class ProductScorer:
         score = 1.0
         explanations = []
         for name, (sub_score, explanation) in components.items():
+            # Penalize heavily if the product does not meet any explicit preference features.
             if sub_score == 0 and name == "preference":
                 score *= -1
                 continue
@@ -82,6 +83,8 @@ class ProductScorer:
             return None
 
     def _calculate_preference_score(self, product: Dict, preferences: Dict, search_term: str) -> Tuple[float, str]:
+        # The 'search_term' parameter is present due to the calling signature from _calculate_product_score,
+        # but it is intentionally not used in this method as preference scoring is solely based on 'features'.
         product_title_lower = product.get('title', '').lower()
         features = preferences.get('features', [])
 
@@ -150,6 +153,7 @@ class ProductScorer:
             return MISSING_SCORE, f"Rating score: {MISSING_SCORE} (no rating found for product)"
         if filters.get('min_rating') and rating < filters['min_rating']:
             return 0.0, f"Rating score: 0 (rating {rating} < min {filters['min_rating']})"
+        # Apply a sigmoid function to scale ratings, aiming for higher scores for ratings above ~4.2 stars.
         rating_score = expit(5 * (rating - 4.23))
         return rating_score, f"Rating score: {rating_score:.2f} ({rating}/5 stars)"
 
@@ -160,6 +164,8 @@ class ProductScorer:
             return MISSING_SCORE, f"Review count score: {MISSING_SCORE} (no reviews found for product)"
         if filters.get('min_reviews') and count < filters['min_reviews']:
             return 0.0, f"Review count score: 0 ({count} < min {filters['min_reviews']})"
+        # Use logarithmic scaling for review counts up to a cap of 5000 to differentiate popular items,
+        # with diminishing returns for very high counts.
         score = math.log10(min(count, 5000) + 1) / math.log10(5000)
         return score, f"Review count score: {score:.2f} ({int(count)} reviews)"
 
@@ -175,5 +181,6 @@ class ProductScorer:
             return score, f"Delivery score: {score:.2f} Actual delivery: {actual}, Target delivery: {target} ({days_late} days late)"
         else:
             days_until = (actual - datetime.now().date()).days
+            # For non-late deliveries, score based on proximity of delivery date (e.g., higher for <=2 days), using inverted sigmoid.
             score = 1 - expit(1.5 * (days_until - 2))
             return score, f"Delivery score: {score:.2f} ({days_until} days until delivery)" 
