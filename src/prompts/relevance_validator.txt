@@ -1,3 +1,73 @@
-Given the search term "[search_term]" and the product title "[product_title]", is this product a primary item matching the search term, or is it an accessory or a related item that is not the primary focus of the search term?
+You are an expert Amazon product relevance filter. Your primary goal is to determine if a given product title is a DIRECT and PRIMARY match for the user's likely intent behind their search term.
 
-Respond with only one word: "primary" or "accessory".
+<user_intent_guidelines>
+The user's intent is key. For example:
+- If the search term is "tennis racket", the user almost certainly wants a standard adult-sized tennis racket suitable for general play.
+  - A "kids tennis racket" or "junior tennis racket" is NOT a direct and primary match because it's for a different user group.
+  - "Tennis balls", "racket grip", "tennis string", or "tennis racket cover" are accessories and therefore NOT direct and primary matches.
+  - A "Wilson Pro Staff Tennis Racket" or "Head Speed MP Tennis Racquet" IS a direct and primary match.
+- If the search term is "laptop charger", a "Dell XPS Laptop Charger" or "65W USB-C Laptop Charger for HP Spectre" IS a direct and primary match if it matches the implied or specified brand/type.
+  - A "laptop bag", "laptop stand", or "universal phone charger" is NOT a direct and primary match.
+- If the search term is "coffee beans", "Whole Bean Dark Roast Coffee - 1kg" IS a direct and primary match.
+  - A "coffee grinder", "coffee mug", or "instant coffee powder" is NOT a direct and primary match for "coffee beans".
+</user_intent_guidelines>
+
+Here are some examples of how to classify:
+
+<example>
+<search_term>men's running shoes</search_term>
+<product_title>Nike Men's Revolution 6 Next Nature Road Running Shoes</product_title>
+<classification>yes</classification>
+</example>
+
+<example>
+<search_term>men's running shoes</search_term>
+<product_title>Women's Cloudfoam Pure 2.0 Running Shoes</product_title>
+<classification>no</classification>
+</example>
+
+<example>
+<search_term>men's running shoes</search_term>
+<product_title>Shoe Laces for Running Shoes - 3 Pairs</product_title>
+<classification>no</classification>
+</example>
+
+<example>
+<search_term>kitchen knife</search_term>
+<product_title>Chef's Knife 8 Inch - Professional Kitchen Knife German High Carbon Stainless Steel</product_title>
+<classification>yes</classification>
+</example>
+
+<example>
+<search_term>kitchen knife</search_term>
+<product_title>Electric Knife Sharpener - 3 Stage Kitchen Knife Sharpener</product_title>
+<classification>no</classification>
+</example>
+
+<example>
+<search_term>kitchen knife</search_term>
+<product_title>Wooden Cutting Board for Kitchen</product_title>
+<classification>no</classification>
+</example>
+
+<example>
+<search_term>AA batteries</search_term>
+<product_title>Amazon Basics 48 Pack AA Alkaline Batteries, 5-Year Shelf Life</product_title>
+<classification>yes</classification>
+</example>
+
+<example>
+<search_term>AA batteries</search_term>
+<product_title>Battery Charger for AA and AAA batteries</product_title>
+<classification>no</classification>
+</example>
+
+Now, please classify the following product:
+
+<search_term_to_classify>[search_term]</search_term_to_classify>
+<product_title_to_classify>[product_title]</product_title_to_classify>
+
+Is the product title a DIRECT and PRIMARY match for the search term, considering the likely user intent and the guidelines provided?
+Respond with ONLY "yes" or "no".
+
+Classification:

@@ -3,7 +3,7 @@ from langgraph.graph import StateGraph, END
 from src.utils.rate_limiter import RateLimiter
 from src.nlp_processor import NLPProcessor
 from src.amazon_scraper import AmazonScraper
-from src.langgraph_nodes import parse_user_query, search_amazon, rank_products
+from src.langgraph_nodes import parse_user_query, search_amazon, rank_products, llm_filter_top_products
 
 class AssistantState(TypedDict, total=False):
     user_input: str
@@ -33,9 +33,13 @@ def initialize_agent():
     graph.add_node("parse_query", parse_user_query)
     graph.add_node("search_amazon", search_amazon)
     graph.add_node("rank_products", rank_products)
+    graph.add_node("llm_filter_top_products", llm_filter_top_products)
+
     graph.add_edge("parse_query", "search_amazon")
     graph.add_edge("search_amazon", "rank_products")
-    graph.add_edge("rank_products", END)
+    graph.add_edge("rank_products", "llm_filter_top_products")
+    graph.add_edge("llm_filter_top_products", END)
+
     graph.set_entry_point("parse_query")
     app = graph.compile()
 
@@ -62,21 +66,32 @@ def process_query(app, nlp_processor, scraper, rate_limiter, user_input, previou
         "previous_context": previous_context
     }
     
-    result = app.invoke(initial_state)
-    
-    ranked_products = result.get("ranked_products", [])
+    ranked_products = []
     summary = None
     new_context = {}
-
-    if ranked_products:
-        summary = nlp_processor.summarize_results_with_llm(ranked_products)
-        new_context = {
-            "query": result.get("parsed_query", {}).get("search_term", ""),
-            "filters": result.get("parsed_query", {}).get("filters", {}),
-            "preferences": result.get("parsed_query", {}).get("preferences", {}),
-            "results": ranked_products
-        }
     
+    try:
+        result = app.invoke(initial_state)
+
+        ranked_products = result.get("ranked_products", [])
+
+        if ranked_products:
+            summary = nlp_processor.summarize_results_with_llm(ranked_products)
+            new_context = {
+                "query": result.get("parsed_query", {}).get("search_term", ""),
+                "filters": result.get("parsed_query", {}).get("filters", {}),
+                "preferences": result.get("parsed_query", {}).get("preferences", {}),
+                "results": ranked_products
+            }
+
+    except Exception as e:
+        print(f"Error during app.invoke or result processing: {e}")
+        raise
+    finally:
+        if scraper:
+            scraper.close()
+            scraper.logger.info("AmazonScraper resources closed after process_query execution.")
+
     return ranked_products, summary, new_context
 
 def format_display_results(products: List[Dict]) -> str:

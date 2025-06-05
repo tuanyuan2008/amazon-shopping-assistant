@@ -28,8 +28,8 @@ class AmazonScraper:
 
         self.playwright: Optional[Playwright] = None
         self.browser: Optional[Browser] = None
-        self.driver: Optional[Page] = None  # This is now a Playwright Page
-        # DO NOT CALL _initialize_driver() or _ensure_playwright_setup() here
+        self.driver: Optional[Page] = None
+        # Initialization is deferred to _ensure_playwright_setup
 
     def _ensure_playwright_setup(self) -> None:
         """Initialize Playwright, launch browser, and create a new page if not already done."""
@@ -45,27 +45,11 @@ class AmazonScraper:
                 "--disable-blink-features=AutomationControlled"
             ]
 
-            if platform.system() == "Darwin":
-                try:
-                    self.logger.info("Attempting to launch Playwright WebKit (Safari)...")
-                    self.browser = self.playwright.webkit.launch(headless=self.config.HEADLESS_MODE)
-                    if self.config.HEADLESS_MODE:
-                        self.logger.warning("Running WebKit in headless mode. Behavior may differ from headed Safari.")
-                except Exception as e:
-                    self.logger.warning(f"Playwright WebKit (Safari) setup failed: {e}. Falling back to Chromium.")
-                    if not self.playwright: # Should not happen if first try block succeeded. Safety.
-                        self.playwright = sync_playwright().start()
-                    self.logger.info("Launching Playwright Chromium...") # Consistent log message
-                    self.browser = self.playwright.chromium.launch(
-                        headless=self.config.HEADLESS_MODE,
-                        args=chromium_args
-                    )
-            else:
-                self.logger.info("Launching Playwright Chromium...")
-                self.browser = self.playwright.chromium.launch(
-                    headless=self.config.HEADLESS_MODE,
-                    args=chromium_args
-                )
+            self.logger.info("Launching Playwright Chromium...")
+            self.browser = self.playwright.chromium.launch(
+                headless=self.config.HEADLESS_MODE,
+                args=chromium_args
+            )
 
             user_agent = self.config.USER_AGENT if self.config.USER_AGENT else None
             self.driver = self.browser.new_page(user_agent=user_agent)
@@ -74,7 +58,6 @@ class AmazonScraper:
 
         except Exception as e:
             self.logger.error(f"Error during Playwright setup: {e}", exc_info=True)
-            # Ensure cleanup if partial setup occurred
             if self.browser:
                 try:
                     self.browser.close()
@@ -88,16 +71,15 @@ class AmazonScraper:
             self.playwright = None
             self.browser = None
             self.driver = None
-            raise # Re-raise the exception to signal failure to the caller
+            raise
 
     def _get_page_results(self, page: int, first_url: Optional[str] = None) -> List[Dict]:
         """Get results from the current page."""
         max_retries = 2
         for attempt in range(max_retries):
-            # Wait for search results to load
             try:
                 self.driver.wait_for_selector("[data-component-type='s-search-result']", timeout=10000)
-            except Exception as e: # Playwright specific timeout error is playwright.sync_api.TimeoutError
+            except Exception as e:
                 self.logger.warning(f"Timeout waiting for page results selector on page {page}, attempt {attempt + 1}: {e}")
                 if attempt < max_retries - 1:
                     self.driver.reload()
@@ -128,7 +110,7 @@ class AmazonScraper:
 
     def search_products(self, query: str, filters: Dict, max_results: int = 100) -> List[Dict]:
         """Search Amazon for products using a keyword and filter dict."""
-        self._ensure_playwright_setup() # Ensure driver is ready
+        self._ensure_playwright_setup()
 
         if not self.driver:
             self.logger.error("Playwright driver not initialized. Cannot perform search.")
@@ -180,7 +162,6 @@ class AmazonScraper:
 
                 next_url = next_button_handle.get_attribute("href")
                 if next_url:
-                    # Ensure the URL is absolute
                     if next_url.startswith('/'):
                         next_url = f"{self.config.AMAZON_BASE_URL}{next_url}"
                     self.driver.goto(next_url)
@@ -318,14 +299,33 @@ class AmazonScraper:
         Extract the earliest delivery date (as a date object) from a delivery estimate string in the element.
         Handles phrases like 'Get it by...', 'Arrives...', 'FREE delivery...', etc.
         """
+        """
+        Extract the earliest delivery date (as a date object) from a delivery estimate string in the element.
+        Handles phrases like 'Get it by...', 'Arrives...', 'FREE delivery...', etc.
+        """
+        text = "" # Initialize text to ensure it's available for logging in case of early error
         try:
             text = element.get_text(separator=" ", strip=True)
             # Extract all date-like phrases
+            # Regex looks for "today", "tomorrow", or "Month Day" (e.g., "Jan 1", "December 25")
             date_matches = re.findall(r"(today|tomorrow|[A-Z][a-z]+ \d{1,2})", text, re.IGNORECASE)
-            parsed_dates = [dateparser.parse(d, settings={"PREFER_DATES_FROM": "future"}) for d in date_matches]
-            return min([d.date() for d in parsed_dates if d]) if parsed_dates else None
+
+            if not date_matches:
+                return None
+
+            parsed_dates = [dateparser.parse(d, settings={"PREFER_DATES_FROM": "future", "STRICT_PARSING": False}) for d in date_matches]
+
+            # Filter out None results from dateparser and get the date part
+            valid_dates = [d.date() for d in parsed_dates if d]
+
+            if not valid_dates: # Check if the list of actual date objects is empty
+                return None
+
+            return min(valid_dates) # Now it's safe to call min
+
         except Exception as e:
-            self.logger.error("Delivery date extraction failed:", exc_info=True)
+            # Log the specific text that failed to parse if it's helpful
+            self.logger.error(f"Delivery date extraction failed for text snippet: '{text[:100]}...'", exc_info=True)
             return None
 
     def _extract_inline_unit_price(self, element) -> Optional[str]:
@@ -349,23 +349,22 @@ class AmazonScraper:
 
     def close(self):
         """Shut down the Playwright browser and Playwright instance."""
-        if self.driver: # Page might not exist if init failed early
+        if self.driver:
             try:
-                self.driver.close() # Close the page
+                self.driver.close()
             except Exception as e:
                 self.logger.warning(f"Error closing Playwright page: {e}")
-        if self.browser: # Browser might not exist if init failed early
+        if self.browser:
             try:
                 self.browser.close()
             except Exception as e:
                 self.logger.warning(f"Error closing Playwright browser: {e}")
-        if self.playwright: # Playwright instance might not exist if init failed very early
+        if self.playwright:
             try:
                 self.playwright.stop()
             except Exception as e:
                 self.logger.warning(f"Error stopping Playwright: {e}")
         self.logger.info("Playwright resources closed.")
-        # Reset state to allow potential re-initialization if the instance is reused
         self.driver = None
         self.browser = None
         self.playwright = None

@@ -21,7 +21,7 @@ class Config:
         self.REQUEST_DELAY_MAX = float(os.getenv('REQUEST_DELAY_MAX', '5'))
         
         # Selenium Configuration
-        self.HEADLESS_MODE = os.getenv('HEADLESS_MODE', 'True').lower() == 'true'
+        self.HEADLESS_MODE = os.getenv('HEADLESS_MODE', 'False').lower() == 'true'
         self.USER_AGENT = os.getenv('USER_AGENT', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
         # Validate configuration
