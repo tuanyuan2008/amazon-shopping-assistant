@@ -66,33 +66,47 @@ def process_query(app, nlp_processor, scraper, rate_limiter, user_input, previou
         "previous_context": previous_context
     }
     
-    ranked_products = []
-    summary = None
-    new_context = {}
-    
+    # Initial values
+    ranked_products_final = []
+    summary_final = None
+    new_context_final = {}
+
     try:
         result = app.invoke(initial_state)
 
-        ranked_products = result.get("ranked_products", [])
+        # Get products from the result state (this key should be the final output from the graph)
+        processed_ranked_products = result.get("ranked_products", [])
 
-        if ranked_products:
-            summary = nlp_processor.summarize_results_with_llm(ranked_products)
-            new_context = {
+        if processed_ranked_products:
+            summary_final = nlp_processor.summarize_results_with_llm(processed_ranked_products)
+            new_context_final = {
                 "query": result.get("parsed_query", {}).get("search_term", ""),
                 "filters": result.get("parsed_query", {}).get("filters", {}),
                 "preferences": result.get("parsed_query", {}).get("preferences", {}),
-                "results": ranked_products
+                "results": processed_ranked_products
             }
+            ranked_products_final = processed_ranked_products
+        else:
+            # No products after all processing (including LLM filtering)
+            summary_final = "No relevant products found after validation."
+            # ranked_products_final remains []
+            # new_context_final remains {}
 
-    except Exception as e:
-        print(f"Error during app.invoke or result processing: {e}")
-        raise
+    except Exception as e_invoke:
+        # Log this exception properly in a real app
+        if scraper and hasattr(scraper, 'logger'): # Check if scraper and logger exist
+            scraper.logger.error(f"Exception during LangGraph app.invoke or subsequent processing: {e_invoke}", exc_info=True)
+        else: # Fallback logging if scraper or its logger is not available
+            print(f"Exception during LangGraph app.invoke or subsequent processing: {e_invoke}")
+        summary_final = "An error occurred while processing your request."
+        # ranked_products_final, new_context_final remain empty.
+        # Not re-raising here to allow returning a 200 OK with the error message in summary.
     finally:
         if scraper:
             scraper.close()
             scraper.logger.info("AmazonScraper resources closed after process_query execution.")
 
-    return ranked_products, summary, new_context
+    return ranked_products_final, summary_final, new_context_final
 
 def format_display_results(products: List[Dict]) -> str:
     """Formats the ranked products for display."""

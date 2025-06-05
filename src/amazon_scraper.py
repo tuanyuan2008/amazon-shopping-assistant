@@ -46,8 +46,10 @@ class AmazonScraper:
             ]
 
             self.logger.info("Launching Playwright Chromium...")
+            # Log the effective HEADLESS_MODE value being used
+            self.logger.info(f"Attempting to launch Chromium with headless={self.config.HEADLESS_MODE} (Type: {type(self.config.HEADLESS_MODE)})")
             self.browser = self.playwright.chromium.launch(
-                headless=self.config.HEADLESS_MODE,
+                headless=self.config.HEADLESS_MODE, # This should be a boolean
                 args=chromium_args
             )
 

@@ -49,37 +49,49 @@ class NLPProcessor:
     def summarize_results_with_llm(self, results: List[Dict]) -> str:
         """Use an LLM to create a natural language summary of the provided search results."""
         try:
-            if not results: # Handle empty list explicitly
-                return "No products to summarize."
+            if not results:
+                return "No products to summarize." # Or a more user-friendly "No relevant products found."
 
-            # The 'results' list is now expected to be the final, curated list (e.g., top N validated).
-            # No more slicing like results[:5].
+            self.logger.info(f"Summarizing {len(results)} final products.")
+
+            # Create a concise representation of products for the LLM
+            product_summaries_for_prompt = []
+            for i, product in enumerate(results, 1):
+                title = product.get('title', 'N/A')
+                price = product.get('price', 'N/A')
+                rating = product.get('rating', 'N/A') # e.g., "4.5 out of 5 stars"
+                # review_count = product.get('review_count', 'N/A') # Might add too many tokens
+
+                # Keep it brief, focusing on what a summary would highlight.
+                # The original product dict can be very verbose.
+                product_info = f"{i}. Title: {title}, Price: ${price}, Rating: {rating}"
+                product_summaries_for_prompt.append(product_info)
             
+            # Join the summaries into a single string
+            concise_results_str = "\n".join(product_summaries_for_prompt)
+
             prompt_template = (self.prompt_dir / 'results_summarizer.txt').read_text()
-            # The prompt template itself might need to be general enough, or we might need
-            # to adjust how 'results' are formatted if the list is too long for the prompt.
-            # However, 'results' should now be a small list (e.g., up to TOP_N_FOR_LLM_VALIDATION).
 
-            # Let's consider the content sent to the LLM. Sending the full dicts might be verbose.
-            # Extracting key information might be better.
-            # For now, keep it as is and assume the prompt can handle the current format.
-            # A future improvement could be to format 'results_str' more carefully.
-            results_str = str(results) # Convert the list of dicts to a string representation
+            # Construct user message for the summarizer LLM
+            user_message_content = (
+                "Please provide a concise summary for the following list of products. "
+                "Highlight any notable trends in terms of price, ratings, or common features if apparent. "
+                "Do not list each product individually in your summary; give an overall synthesis.\n\n"
+                "Products:\n"
+                f"{concise_results_str}"
+            )
 
-            # Consider potential token limits for the summarizer prompt if 'results_str' is too long.
-            # If len(results) is now small (e.g., <= 10), str(results) should be fine.
-            # We might need to truncate results_str or select key fields if it's too large.
-            # For now, let's assume it's manageable.
-
-            self.logger.info(f"Summarizing {len(results)} products.")
+            # Check token count before sending, if possible, or rely on API error for now.
+            # For gpt-3.5-turbo (16k context), this should be much safer.
+            # self.logger.debug(f"Summarizer user message content: {user_message_content}")
 
             response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": prompt_template},
-                    {"role": "user", "content": f"Please summarize these products: {results_str}"}
+                    {"role": "user", "content": user_message_content}
                 ],
-                temperature=0.2
+                temperature=0.3 # Slightly higher for more varied summary
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
