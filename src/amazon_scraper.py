@@ -7,17 +7,8 @@ import subprocess
 import sys
 import re
 
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.safari.options import Options as SafariOptions
-from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.webdriver.safari.service import Service as SafariService
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
+from playwright.sync_api import sync_playwright, Playwright, Browser, Page
 from bs4 import BeautifulSoup
-from selenium.common.exceptions import ElementClickInterceptedException
 
 from .utils.rate_limiter import RateLimiter
 from .utils.config import Config
@@ -34,55 +25,69 @@ class AmazonScraper:
             formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
-        self.driver = self._initialize_driver()
 
-    def _initialize_driver(self) -> webdriver.Remote:
-        """Initialize WebDriver based on OS."""
-        if platform.system() == "Darwin":
-            try:
-                self.logger.info("Attempting to launch Safari WebDriver...")
-                return self._setup_safari()
-            except Exception as e:
-                self.logger.warning(f"Safari WebDriver setup failed: {e}. Falling back to Chrome.")
+        self.playwright: Optional[Playwright] = None
+        self.browser: Optional[Browser] = None
+        self.driver: Optional[Page] = None
 
-        self.logger.info("Launching Chrome WebDriver...")
-        return self._setup_chrome()
+    def _ensure_playwright_setup(self) -> None:
+        """Initialize Playwright, launch browser, and create a new page if not already done."""
+        if self.driver:
+            self.logger.info("Playwright setup already complete. Skipping re-initialization.")
+            return
 
-    def _setup_safari(self) -> webdriver.Safari:
-        """Setup Safari WebDriver."""
-        if sys.platform == "darwin":
-            try:
-                subprocess.run(["pkill", "-f", "safaridriver"], check=False)
-            except Exception as e:
-                self.logger.warning(f"Could not kill safaridriver: {e}")
-        options = SafariOptions()
-        if self.config.HEADLESS_MODE:
-            self.logger.warning("Safari does not support headless mode.")
-        return webdriver.Safari(service=SafariService(), options=options)
+        self.logger.info("Performing Playwright setup...")
+        try:
+            self.playwright = sync_playwright().start()
 
-    def _setup_chrome(self) -> webdriver.Chrome:
-        """Setup Chrome WebDriver with stealth options."""
-        options = ChromeOptions()
-        if self.config.HEADLESS_MODE:
-            options.add_argument("--headless")
-        options.add_argument(f"user-agent={self.config.USER_AGENT}")
-        options.add_argument("--disable-blink-features=AutomationControlled")
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option("useAutomationExtension", False)
+            chromium_args = [
+                "--disable-blink-features=AutomationControlled"
+            ]
 
-        service = ChromeService(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options)
-        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-        return driver
+            self.logger.info("Launching Playwright Chromium...")
+            # Log the effective HEADLESS_MODE value being used
+            self.logger.info(f"Attempting to launch Chromium with headless={self.config.HEADLESS_MODE} (Type: {type(self.config.HEADLESS_MODE)})")
+            self.browser = self.playwright.chromium.launch(
+                headless=self.config.HEADLESS_MODE,
+                args=chromium_args
+            )
+
+            user_agent = self.config.USER_AGENT if self.config.USER_AGENT else None
+            self.driver = self.browser.new_page(user_agent=user_agent)
+            self.driver.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            self.logger.info("Playwright setup complete.")
+
+        except Exception as e:
+            self.logger.error(f"Error during Playwright setup: {e}", exc_info=True)
+            if self.browser:
+                try:
+                    self.browser.close()
+                except Exception as close_e:
+                    self.logger.error(f"Error closing browser during setup failure: {close_e}")
+            if self.playwright:
+                try:
+                    self.playwright.stop()
+                except Exception as stop_e:
+                    self.logger.error(f"Error stopping Playwright during setup failure: {stop_e}")
+            self.playwright = None
+            self.browser = None
+            self.driver = None
+            raise
 
     def _get_page_results(self, page: int, first_url: Optional[str] = None) -> List[Dict]:
         """Get results from the current page."""
         max_retries = 2
         for attempt in range(max_retries):
-            # Wait for search results to load
-            WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, "[data-component-type='s-search-result']"))
-            )
+            try:
+                self.driver.wait_for_selector("[data-component-type='s-search-result']", timeout=10000)
+            except Exception as e:
+                self.logger.warning(f"Timeout waiting for page results selector on page {page}, attempt {attempt + 1}: {e}")
+                if attempt < max_retries - 1:
+                    self.driver.reload()
+                    continue
+                else:
+                    self.logger.error(f"Failed to load page {page} after multiple retries.")
+                    return []
             
             page_results = self._extract_products()
             
@@ -90,11 +95,10 @@ class AmazonScraper:
                 self.logger.info("No results found on this page")
                 return []
             
-            # Check if we're seeing the same page
-            if first_url and page_results[0]['url'] == first_url:
+            if first_url and page_results and page_results[0]['url'] == first_url:
                 if attempt < max_retries - 1:
                     self.logger.info(f"Page {page} not fully loaded, retrying... (attempt {attempt + 1}/{max_retries})")
-                    self.driver.refresh()
+                    self.driver.reload()
                     continue
                 else:
                     self.logger.info("Page not loading properly after retries")
@@ -106,10 +110,16 @@ class AmazonScraper:
 
     def search_products(self, query: str, filters: Dict, max_results: int = 100) -> List[Dict]:
         """Search Amazon for products using a keyword and filter dict."""
+        self._ensure_playwright_setup()
+
+        if not self.driver:
+            self.logger.error("Playwright driver not initialized. Cannot perform search.")
+            return []
+
         try:
             url = self._construct_search_url(query, filters)
             self.logger.info(f"Searching Amazon: {url}")
-            self.driver.get(url)
+            self.driver.goto(url)
             self.rate_limiter.wait()
 
             results = []
@@ -129,29 +139,33 @@ class AmazonScraper:
                     results = results[:max_results]
                     break
 
-                # Scroll to bottom to ensure next button is visible
-                self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                self.driver.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 self.rate_limiter.wait()
 
-                # Find next button
-                next_button = None
+                next_button_handle = None
                 for selector in ["a.s-pagination-next", "a[href*='page=']"]:
-                    buttons = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                    if buttons and "s-pagination-disabled" not in buttons[0].get_attribute("class"):
-                        next_button = buttons[0]
+                    button_handles = self.driver.query_selector_all(selector)
+                    for handle in button_handles:
+                        class_attr = handle.get_attribute("class") or ""
+                        if "s-pagination-disabled" not in class_attr:
+                            next_button_handle = handle
+                            break
+                    if next_button_handle:
                         break
 
-                if not next_button:
-                    self.logger.info("No more results available")
+                if not next_button_handle:
+                    self.logger.info("No more results available (next button not found or disabled)")
                     break
 
-                # Get the next page URL and navigate directly
-                next_url = next_button.get_attribute("href")
+                next_url = next_button_handle.get_attribute("href")
                 if next_url:
-                    self.driver.get(next_url)
+                    if next_url.startswith('/'):
+                        next_url = f"{self.config.AMAZON_BASE_URL}{next_url}"
+                    self.driver.goto(next_url)
                     page += 1
                     self.rate_limiter.wait()
                 else:
+                    self.logger.info("Next button found but no href attribute.")
                     break
 
             self.logger.info(f"Found {len(results)} products total")
@@ -166,7 +180,6 @@ class AmazonScraper:
         query_param = f"k={query.replace(' ', '+')}"
         rh_parts = []
 
-        # Price range
         price_min = filters.get('price_min')
         price_max = filters.get('price_max')
         if price_min is not None and price_max is not None:
@@ -206,20 +219,19 @@ class AmazonScraper:
 
     def _extract_products(self) -> List[Dict]:
         """Parse search results and return structured product info."""
-        soup = BeautifulSoup(self.driver.page_source, 'html.parser')
+        soup = BeautifulSoup(self.driver.content(), 'html.parser')
         results = []
 
         for item in soup.select("[data-component-type='s-search-result']"):
             try:
-                # Skip sponsored products to dedup
                 if item.select_one("span.puis-label-popover-default"):
                     continue
 
                 title = None
                 for selector in [
-                    "h2 a span",  # Standard product title
-                    ".a-size-base-plus.a-color-base",  # Alternative title format
-                    ".a-size-medium.a-color-base",  # Another common title format
+                    "h2 a span",
+                    ".a-size-base-plus.a-color-base",
+                    ".a-size-medium.a-color-base",
                 ]:
                     title = self._extract_text(item, selector)
                     if title:
@@ -282,14 +294,29 @@ class AmazonScraper:
         Extract the earliest delivery date (as a date object) from a delivery estimate string in the element.
         Handles phrases like 'Get it by...', 'Arrives...', 'FREE delivery...', etc.
         """
+        """
+        Extract the earliest delivery date (as a date object) from a delivery estimate string in the element.
+        Handles phrases like 'Get it by...', 'Arrives...', 'FREE delivery...', etc.
+        """
+        text = ""
         try:
             text = element.get_text(separator=" ", strip=True)
-            # Extract all date-like phrases
             date_matches = re.findall(r"(today|tomorrow|[A-Z][a-z]+ \d{1,2})", text, re.IGNORECASE)
-            parsed_dates = [dateparser.parse(d, settings={"PREFER_DATES_FROM": "future"}) for d in date_matches]
-            return min([d.date() for d in parsed_dates if d]) if parsed_dates else None
+
+            if not date_matches:
+                return None
+
+            parsed_dates = [dateparser.parse(d, settings={"PREFER_DATES_FROM": "future", "STRICT_PARSING": False}) for d in date_matches]
+
+            valid_dates = [d.date() for d in parsed_dates if d]
+
+            if not valid_dates:
+                return None
+
+            return min(valid_dates)
+
         except Exception as e:
-            self.logger.error("Delivery date extraction failed:", exc_info=True)
+            self.logger.error(f"Delivery date extraction failed for text snippet: '{text[:100]}...'", exc_info=True)
             return None
 
     def _extract_inline_unit_price(self, element) -> Optional[str]:
@@ -312,6 +339,23 @@ class AmazonScraper:
         return element.select_one("img.s-image")["src"]
 
     def close(self):
-        """Shut down the WebDriver."""
+        """Shut down the Playwright browser and Playwright instance."""
         if self.driver:
-            self.driver.quit()
+            try:
+                self.driver.close()
+            except Exception as e:
+                self.logger.warning(f"Error closing Playwright page: {e}")
+        if self.browser:
+            try:
+                self.browser.close()
+            except Exception as e:
+                self.logger.warning(f"Error closing Playwright browser: {e}")
+        if self.playwright:
+            try:
+                self.playwright.stop()
+            except Exception as e:
+                self.logger.warning(f"Error stopping Playwright: {e}")
+        self.logger.info("Playwright resources closed.")
+        self.driver = None
+        self.browser = None
+        self.playwright = None

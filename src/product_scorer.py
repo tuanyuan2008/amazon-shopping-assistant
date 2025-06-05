@@ -1,14 +1,17 @@
 import logging
 import math
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 from scipy.special import expit
 from scipy.stats import percentileofscore
 from .constants import MISSING_SCORE
 from .date_handler import DateHandler
 
+if TYPE_CHECKING:
+    from .nlp_processor import NLPProcessor # Forward declaration for type hint
+
 class ProductScorer:
-    def __init__(self):
+    def __init__(self, nlp_processor: 'Optional[NLPProcessor]' = None):
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.INFO)
         if not self.logger.handlers:
@@ -17,21 +20,24 @@ class ProductScorer:
             formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
+        self.nlp_processor = nlp_processor
         self.date_handler = DateHandler()
+        self.llm_validations_this_run = 0
 
-    def rank_products(self, products: List[Dict], filters: Dict, preferences: Dict) -> List[Dict]:
+    def rank_products(self, products: List[Dict], filters: Dict, preferences: Dict, search_term: str) -> List[Dict]:
         """Rank products based on filters and preferences."""
+        self.llm_validations_this_run = 0
         scored = []
-        all_non_positive_scores = True  # Start assuming all scores are non-positive
+        all_non_positive_scores = True
         for product in products:
-            score, explanation = self._calculate_product_score(product, filters, preferences, products)
+            score, explanation = self._calculate_product_score(product, filters, preferences, products, search_term)
             scored.append({
                 **product,
                 "score": score,
                 "ranking_explanation": explanation,
             })
             if score > 0:
-                all_non_positive_scores = False  # Found a positive score, so not all are non-positive
+                all_non_positive_scores = False
         self.logger.info(f"All non-positive scores: {all_non_positive_scores}")
         return sorted(scored, key=lambda x: x["score"], reverse=not all_non_positive_scores)
 
@@ -40,11 +46,12 @@ class ProductScorer:
         product: Dict, 
         filters: Dict, 
         preferences: Dict, 
-        all_products: List[Dict]
+        all_products: List[Dict],
+        search_term: str
     ) -> Tuple[float, str]:
         """Calculate the overall score for a product."""
         components = {
-            "preference": self._calculate_preference_score(product, preferences),
+            "preference": self._calculate_preference_score(product, preferences, search_term),
             "price": self._calculate_price_score(product, filters, all_products),
             "rating": self._calculate_rating_score(product, filters),
             "reviews": self._calculate_review_score(product, filters),
@@ -54,7 +61,7 @@ class ProductScorer:
         score = 1.0
         explanations = []
         for name, (sub_score, explanation) in components.items():
-            # if no preference match, we can ignore this filter
+            # Penalize heavily if the product does not meet any explicit preference features.
             if sub_score == 0 and name == "preference":
                 score *= -1
                 continue
@@ -75,29 +82,36 @@ class ProductScorer:
         except (ValueError, AttributeError):
             return None
 
-    def _calculate_preference_score(self, product: Dict, preferences: Dict) -> Tuple[float, str]:
-        """Calculate how well the product matches user preferences."""
-        product_title = product.get('title', '').lower()
+    def _calculate_preference_score(self, product: Dict, preferences: Dict, search_term: str) -> Tuple[float, str]:
+        product_title_lower = product.get('title', '').lower()
         features = preferences.get('features', [])
-        preference_tokens = [f.strip().lower() for f in features] if features else []
 
-        if not preference_tokens:
-            return MISSING_SCORE, f"Preference score: {MISSING_SCORE} (no preferences to match)"
+        preference_features_to_match = [f.strip().lower() for f in features if f]
+
+        if not preference_features_to_match:
+            return 1.0, "Preference score: 1.00 (no specific preference features provided)"
 
         matched_tokens = []
-        missing_tokens = []
+        missing_tokens = list(preference_features_to_match)
+
+        for feature_term in preference_features_to_match:
+            if feature_term in product_title_lower:
+                matched_tokens.append(feature_term)
+                if feature_term in missing_tokens:
+                    missing_tokens.remove(feature_term)
         
-        for token in preference_tokens:
-            if token in product_title:
-                matched_tokens.append(token)
-            else:
-                missing_tokens.append(token)
+        if not preference_features_to_match:
+             match_percentage = 0.0
+        else:
+            match_percentage = len(matched_tokens) / len(preference_features_to_match)
         
-        match_percentage = len(matched_tokens) / len(preference_tokens)
-        
-        explanation = f"Preference score: {match_percentage:.2f} (matched {len(matched_tokens)}/{len(preference_tokens)} features)"
+        explanation_details = []
+        if matched_tokens:
+            explanation_details.append(f"Matched features: {', '.join(matched_tokens)}")
         if missing_tokens:
-            explanation += f", missing: {', '.join(missing_tokens)}"
+            explanation_details.append(f"Missing features: {', '.join(missing_tokens)}")
+
+        explanation = f"Preference score: {match_percentage:.2f} ({'; '.join(explanation_details) if explanation_details else 'No specific preference features to match'})"
 
         return match_percentage, explanation
 
