@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
 from scipy.special import expit
 from scipy.stats import percentileofscore
-from .constants import MISSING_SCORE, ACCESSORY_PENALTY_FACTOR, MAX_LLM_VALIDATIONS_PER_RUN
+from .constants import MISSING_SCORE, MAX_LLM_VALIDATIONS_PER_RUN
 from .date_handler import DateHandler
 
 if TYPE_CHECKING:
