@@ -54,25 +54,17 @@ class NLPProcessor:
 
             self.logger.info(f"Summarizing {len(results)} final products.")
 
-            # Create a concise representation of products for the LLM
             product_summaries_for_prompt = []
             for i, product in enumerate(results, 1):
                 title = product.get('title', 'N/A')
                 price = product.get('price', 'N/A')
-                rating = product.get('rating', 'N/A') # e.g., "4.5 out of 5 stars"
-                # review_count = product.get('review_count', 'N/A') # Might add too many tokens
-
-                # Keep it brief, focusing on what a summary would highlight.
-                # The original product dict can be very verbose.
+                rating = product.get('rating', 'N/A')
                 product_info = f"{i}. Title: {title}, Price: ${price}, Rating: {rating}"
                 product_summaries_for_prompt.append(product_info)
             
-            # Join the summaries into a single string
             concise_results_str = "\n".join(product_summaries_for_prompt)
-
             prompt_template = (self.prompt_dir / 'results_summarizer.txt').read_text()
 
-            # Construct user message for the summarizer LLM
             user_message_content = (
                 "Please provide a concise summary for the following list of products. "
                 "Highlight any notable trends in terms of price, ratings, or common features if apparent. "
@@ -81,17 +73,13 @@ class NLPProcessor:
                 f"{concise_results_str}"
             )
 
-            # Check token count before sending, if possible, or rely on API error for now.
-            # For gpt-3.5-turbo (16k context), this should be much safer.
-            # self.logger.debug(f"Summarizer user message content: {user_message_content}")
-
             response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": prompt_template},
                     {"role": "user", "content": user_message_content}
                 ],
-                temperature=0.3 # Slightly higher for more varied summary
+                temperature=0.3
             )
             return response.choices[0].message.content.strip()
         except Exception as e:
@@ -180,9 +168,10 @@ class NLPProcessor:
         self.logger.info(f"Starting LLM validation for top {len(products_to_validate)} products out of {len(products)} for search term: '{search_term}'")
 
         validated_products_with_llm_response = []
+        # Determine max_workers for ThreadPoolExecutor
         max_workers = min(len(products_to_validate), 5)
 
-        if max_workers == 0:
+        if max_workers == 0: # Should be caught by earlier products_to_validate check, but as safety.
             return []
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -214,7 +203,7 @@ class NLPProcessor:
             product_url = product.get("url")
             if product_url and llm_decisions_map.get(product_url) == "yes":
                 final_filtered_products.append(product)
-            elif not product_url:
+            elif not product_url: # Product missing URL cannot be reliably mapped or used.
                  self.logger.warning(f"Product '{product.get('title')}' missing URL, cannot map LLM decision. Excluding.")
 
         self.logger.info(f"LLM validation complete. Kept {len(final_filtered_products)} out of {len(products_to_validate)} top products.")

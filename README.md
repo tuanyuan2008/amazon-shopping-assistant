@@ -1,131 +1,114 @@
 # Amazon Shopping Assistant Agent
 
-An autonomous agent that helps users shop on Amazon using natural language processing, web automation, and a modern graph-based workflow with [LangGraph](https://github.com/langchain-ai/langgraph).
+An autonomous agent that helps users shop on Amazon using natural language processing, advanced web automation with Playwright, and a modern graph-based workflow with [LangGraph](https://github.com/langchain-ai/langgraph).
 
 ## Features
 
-- Natural language processing for shopping requests
-- Amazon interface navigation (auto-detects Safari on Mac, Chrome elsewhere)
-- Product information extraction and comparison
-- Smart filtering based on user preferences
-- Interactive, modular, and extensible agent workflow using LangGraph
+- Natural language processing for shopping requests.
+- Web automation using **Playwright** (standardized on Chromium) for Amazon interaction.
+- Product information extraction and comparison.
+- Smart filtering based on user preferences.
+- **LLM-based relevance validation**: A post-processing step where top products are validated by an LLM for direct relevance to the search query, ensuring higher quality results.
+- Interactive, modular, and extensible agent workflow using LangGraph.
 
 ## Technical Approach
 
-- **Web Automation**: Selenium WebDriver for Amazon interaction
-- **NLP**: OpenAI GPT models for natural language understanding
-- **Agent Orchestration**: [LangGraph](https://github.com/langchain-ai/langgraph) for multi-step, stateful workflows
-- **Rate Limiting**: Human-like request throttling
+- **Web Automation**: **Playwright** for robust browser interaction.
+- **NLP**: OpenAI GPT models for natural language understanding and relevance validation.
+- **Agent Orchestration**: [LangGraph](https://github.com/langchain-ai/langgraph) for multi-step, stateful workflows.
+- **Rate Limiting**: Human-like request throttling.
+- **Concurrent Processing**: LLM validation calls for top products are made concurrently for improved performance.
 
 ## Setup
 
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd amazon-shopping-assistant
-   ```
+1.  **Clone the Repository:**
+    ```bash
+    git clone <repository-url> # Replace <repository-url> with the actual URL
+    cd amazon-shopping-assistant
+    ```
 
-2. Install Rust (required for pydantic-core):
-   ```bash
-   # Install Rust
-   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-   
-   # Add Rust to your PATH
-   source "$HOME/.cargo/env"
-   
-   # Verify installation
-   rustc --version
-   ```
+2.  **Prerequisites (If not already installed):**
+    *   **Python**: Version 3.10 or higher recommended.
+    *   **Node.js and npm**: For running the React frontend.
+    *   **Rust (Potential Requirement)**: Some Python dependencies (like `pydantic-core` which might be a sub-dependency) may require Rust. If you encounter issues during `pip install`, you might need to install Rust:
+        ```bash
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        source "$HOME/.cargo/env"
+        rustc --version
+        ```
+    *   **OpenBLAS (Potential Requirement for `scipy`)**: If `scipy` is a direct or indirect dependency and causes issues, you might need to OpenBLAS. For macOS using Homebrew:
+        ```bash
+        brew install openblas
+        ```
 
-3. Run the setup script to create a virtual environment and install dependencies:
-   ```bash
-   ./setup.sh
-   ```
+3.  **Run the Setup Script:**
+    This script creates a Python virtual environment (`venv/`) and installs backend dependencies from `requirements.txt`.
+    ```bash
+    ./setup.sh
+    ```
+    *After running `setup.sh`, ensure the virtual environment is active for subsequent backend commands: `source venv/bin/activate`*
 
-4. Install OpenBLAS and scipy:
-   ```bash
-   # Install OpenBLAS (required for scipy)
-   brew install openblas
-   
-   # Install scipy using pre-built wheel
-   pip install --only-binary :all: scipy
-   ```
+4.  **Install Playwright Browsers:**
+    After dependencies are installed, you need to install the browser binaries for Playwright (this project primarily uses Chromium).
+    ```bash
+    playwright install chromium
+    # Or 'playwright install' to install all default browsers (Chromium, Firefox, WebKit)
+    ```
 
-5. Activate the virtual environment:
-   ```bash
-   source venv/bin/activate
-   ```
-
-6. Edit the `.env` file with your OpenAI API key and configuration:
-   ```bash
-   # Edit .env with your OpenAI API key and other settings
-   ```
-
-7. (Mac users only) Enable Safari WebDriver:
-   ```bash
-   safaridriver --enable
-   ```
-   
-## Usage (CLI)
-
-The original command-line interface (CLI) for the agent can be run as described below. For the new web-based UI, see the "Running the Web Application" section.
-
-- After completing the "Setup" steps (including activating the virtual environment and setting up the `.env` file):
-- Run the CLI using:
-  ```bash
-  python main.py
-  ```
-- When prompted, enter your shopping request in natural language (e.g., "Find me a coffee maker under $100 with good reviews that's available for Prime shipping").
-- The agent will parse your query, search Amazon, rank products, and display the top results in the console.
+5.  **Configure Environment Variables:**
+    Create a `.env` file in the project root directory by copying `.env.example`:
+    ```bash
+    cp .env.example .env
+    ```
+    Now, edit the `.env` file with your configurations:
+    *   `OPENAI_API_KEY`: **Required**. Your API key from OpenAI.
+    *   `AMAZON_BASE_URL`: Defaults to `https://www.amazon.com`. Change if needed for a different Amazon region.
+    *   `HEADLESS_MODE`: Set to `True` to run the browser invisibly in the background, or `False` to see the browser window. **Defaults to `False` (headed mode)** if not set.
+    *   `USER_AGENT`: A default user agent is provided. Change if necessary.
+    *   Other variables like `MAX_REQUESTS_PER_MINUTE`, `REQUEST_DELAY_MIN`, `REQUEST_DELAY_MAX` can also be configured.
 
 ## Running the Web Application (React UI + Python API)
 
-The primary way to interact with the Amazon Shopping Assistant is now through a web interface powered by a React frontend and a Python (Flask) backend API. These two components need to be run concurrently.
+The primary way to interact with the Amazon Shopping Assistant is through a web interface. The backend API server and the frontend development server must run concurrently.
 
 ### 1. Backend Setup & Execution (API Server)
 
-The backend server provides the API that the frontend consumes.
-
--   **Location**: The project root directory (`amazon-shopping-assistant/`).
+-   **Location**: Project root directory (`amazon-shopping-assistant/`).
 -   **Environment**:
-    -   Ensure your Python virtual environment is activated (e.g., `source venv/bin/activate` if you used `setup.sh`).
-    -   Make sure you have a `.env` file in the project root with your `OPENAI_API_KEY` and any other necessary configurations (refer to `.env.example`).
--   **Dependencies**: Install or update Python dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
--   **Running the API Server**:
+    -   Activate the Python virtual environment: `source venv/bin/activate`.
+    -   Ensure your `.env` file is correctly configured in the project root.
+-   **Run the API Server**:
     ```bash
     python app.py
     ```
--   **API Availability**: The backend API will start and typically be available at `http://127.0.0.1:5000`. The main endpoint used by the frontend is `POST /api/query`.
+-   **API Availability**: Typically at `http://127.0.0.1:5001`. Main endpoint: `POST /api/query`.
 
 ### 2. Frontend Setup & Execution (React UI)
-
-The frontend provides the user interface in your browser.
 
 -   **Location**: The `frontend/` directory.
 -   **Dependencies**: Navigate to the frontend directory and install Node.js dependencies:
     ```bash
     cd frontend
     npm install
-    npm install -D tailwindcss@3.4.1 postcss autoprefixer
+    # If not already present from previous setup, ensure Tailwind dependencies are there:
+    # npm install -D tailwindcss postcss autoprefixer
     ```
--   **Tailwind CSS Setup**: The project uses Tailwind CSS for styling. The configuration is already set up in:
-    - `tailwind.config.js` - Contains custom theme settings and content paths
-    - `postcss.config.js` - Configures PostCSS with Tailwind CSS and Autoprefixer
-    - `src/index.css` - Includes Tailwind directives (@tailwind base, components, utilities)
--   **Running the Frontend Development Server**:
+-   **Run the Frontend Development Server**:
     ```bash
     npm run dev
     ```
-    *(Note: In some environments, if `vite` is not found, you might need to run `npx vite` or `./node_modules/.bin/vite` directly from the `frontend` directory.)*
--   **Accessing the UI**: Vite will typically start the frontend development server at `http://localhost:5173` (or another port if 5173 is busy - check the output in your terminal). Open this URL in your web browser.
+-   **Accessing the UI**: Typically at `http://localhost:5173` (check terminal output). Open this URL in your browser.
 
-### Development Note:
-Both the backend API server (`python app.py`) and the frontend development server (`npm run dev` in the `frontend` directory) must be running at the same time for the web application to function correctly. The React frontend makes requests to the Python backend API to process queries and fetch results.
+**Note:** Both backend and frontend servers must be running simultaneously.
 
-## Project Structure
+## Key Configuration Constants (Code)
+
+Some operational parameters are set as constants in the Python code:
+-   `src/constants.py`:
+    -   `TOP_N_FOR_LLM_VALIDATION`: Defines how many top-scored products (after initial scoring) are sent for LLM relevance validation. Currently set to `25`.
+    -   `MISSING_SCORE`: Default score for certain missing attributes.
+
+## Project Structure Overview
 
 ```
 amazon-shopping-assistant/
@@ -133,58 +116,38 @@ amazon-shopping-assistant/
 ├── requirements.txt        # Python backend dependencies
 ├── setup.sh                # Script to set up Python environment
 ├── .env.example            # Example environment variables
-├── .env                    # Your environment variables (contains API keys)
+├── .env                    # Your environment variables
 ├── app.py                  # Main Flask application (Backend API server)
-├── main.py                 # Original CLI entry point for the agent
 ├── frontend/               # React frontend application
-│   ├── package.json        # Frontend dependencies and scripts
-│   ├── vite.config.ts      # Vite configuration (build tool for frontend)
-│   ├── tailwind.config.js  # Tailwind CSS configuration
-│   ├── postcss.config.js   # PostCSS configuration
-│   ├── public/             # Static assets for the frontend
-│   └── src/                # Frontend source code (React components, services)
-│       ├── App.tsx         # Main React application component
-│       ├── index.css       # Main CSS file (includes Tailwind directives)
-│       └── components/     # Reusable React components
-│           ├── QueryInput.tsx
-│           ├── ResultsDisplay.tsx
-│           └── SummaryDisplay.tsx
-│       └── services/       # API service for frontend-backend communication
-│           └── api.ts
-├── src/                    # Python source code for the backend agent logic
-│   ├── __init__.py
-│   ├── agent.py            # Core agent workflow and state management
-│   ├── amazon_scraper.py   # Selenium-based Amazon scraper
-│   ├── nlp_processor.py    # NLP processing using OpenAI
+│   └── ...                 # (Structure as before)
+├── src/                    # Python source code for the backend
+│   ├── agent.py            # Core agent workflow (LangGraph definition)
+│   ├── amazon_scraper.py   # Playwright-based Amazon scraper
+│   ├── nlp_processor.py    # NLP (OpenAI GPT) & LLM validation logic
 │   ├── langgraph_nodes.py  # Nodes for the LangGraph agent
+│   ├── product_scorer.py   # Logic for scoring products (excluding main search term relevance)
+│   ├── constants.py        # Key constants like TOP_N_FOR_LLM_VALIDATION
 │   ├── models.py           # Pydantic models
 │   └── utils/              # Utility modules (config, rate limiter)
-│       ├── __init__.py
-│       ├── config.py
-│       └── rate_limiter.py
+│   └── prompts/            # Prompt files for LLMs
+│       ├── relevance_validator.txt # Prompt for yes/no relevance
+│       └── ...
 ├── tests/                  # Python backend tests
-│   ├── __init__.py
-│   └── test_app.py         # Pytest tests for the Flask API
-└── venv/                   # Python virtual environment (if created by setup.sh)
+│   └── ...                 # (Structure as before)
+└── ...
 ```
+*(Project structure is simplified for brevity here, showing key changes.)*
 
 ## Development Notes
 
-- Uses LangGraph for modular, stateful agent orchestration
-- Rate limiting and human-like behavior for web scraping
-- Focuses on extracting and ranking relevant product information
-- Handles Amazon's dynamic interface changes
+- Uses LangGraph for modular, stateful agent orchestration.
+- Playwright with Chromium is used for web scraping.
+- LLM validation acts as a post-processing filter on an initial set of top products to improve final relevance.
+- Focuses on extracting and ranking relevant product information based on user queries and explicit preferences.
 
-## Walk-Through Demo
-https://youtu.be/FADMUAF30ak
-
-Find the report [here](https://hackmd.io/@nJ3wWZdKQGi1_-J7hyBKlg/r177wlNxlg).
+## Original CLI (`main.py`)
+The `main.py` file provides an older command-line interface. While the core logic has been updated, the primary interaction method is now the web application (`app.py` + frontend). If using `main.py`, ensure it's adapted for any changes in `agent.py` or other core modules if necessary.
 
 ---
 
-**To run the agent, always use:**
-```bash
-python main.py
-```
-
-If you have questions or want to extend the workflow, see the code in `src/langgraph_nodes.py` and `main.py` for how to add new steps or tools. 
+Find the original report [here](https://hackmd.io/@nJ3wWZdKQGi1_-J7hyBKlg/r177wlNxlg) and demo [here](https://youtu.be/FADMUAF30ak). (These may refer to older versions of the project).

@@ -29,7 +29,6 @@ class AmazonScraper:
         self.playwright: Optional[Playwright] = None
         self.browser: Optional[Browser] = None
         self.driver: Optional[Page] = None
-        # Initialization is deferred to _ensure_playwright_setup
 
     def _ensure_playwright_setup(self) -> None:
         """Initialize Playwright, launch browser, and create a new page if not already done."""
@@ -49,7 +48,7 @@ class AmazonScraper:
             # Log the effective HEADLESS_MODE value being used
             self.logger.info(f"Attempting to launch Chromium with headless={self.config.HEADLESS_MODE} (Type: {type(self.config.HEADLESS_MODE)})")
             self.browser = self.playwright.chromium.launch(
-                headless=self.config.HEADLESS_MODE, # This should be a boolean
+                headless=self.config.HEADLESS_MODE,
                 args=chromium_args
             )
 
@@ -96,7 +95,6 @@ class AmazonScraper:
                 self.logger.info("No results found on this page")
                 return []
             
-            # Check if we're seeing the same page
             if first_url and page_results and page_results[0]['url'] == first_url:
                 if attempt < max_retries - 1:
                     self.logger.info(f"Page {page} not fully loaded, retrying... (attempt {attempt + 1}/{max_retries})")
@@ -141,14 +139,11 @@ class AmazonScraper:
                     results = results[:max_results]
                     break
 
-                # Scroll to bottom to ensure next button is visible
                 self.driver.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 self.rate_limiter.wait()
 
-                # Find next button
                 next_button_handle = None
                 for selector in ["a.s-pagination-next", "a[href*='page=']"]:
-                    # Attempt to find the first non-disabled button matching the selector
                     button_handles = self.driver.query_selector_all(selector)
                     for handle in button_handles:
                         class_attr = handle.get_attribute("class") or ""
@@ -185,7 +180,6 @@ class AmazonScraper:
         query_param = f"k={query.replace(' ', '+')}"
         rh_parts = []
 
-        # Price range
         price_min = filters.get('price_min')
         price_max = filters.get('price_max')
         if price_min is not None and price_max is not None:
@@ -230,15 +224,14 @@ class AmazonScraper:
 
         for item in soup.select("[data-component-type='s-search-result']"):
             try:
-                # Skip sponsored products to dedup
                 if item.select_one("span.puis-label-popover-default"):
                     continue
 
                 title = None
                 for selector in [
-                    "h2 a span",  # Standard product title
-                    ".a-size-base-plus.a-color-base",  # Alternative title format
-                    ".a-size-medium.a-color-base",  # Another common title format
+                    "h2 a span",
+                    ".a-size-base-plus.a-color-base",
+                    ".a-size-medium.a-color-base",
                 ]:
                     title = self._extract_text(item, selector)
                     if title:
@@ -305,11 +298,9 @@ class AmazonScraper:
         Extract the earliest delivery date (as a date object) from a delivery estimate string in the element.
         Handles phrases like 'Get it by...', 'Arrives...', 'FREE delivery...', etc.
         """
-        text = "" # Initialize text to ensure it's available for logging in case of early error
+        text = ""
         try:
             text = element.get_text(separator=" ", strip=True)
-            # Extract all date-like phrases
-            # Regex looks for "today", "tomorrow", or "Month Day" (e.g., "Jan 1", "December 25")
             date_matches = re.findall(r"(today|tomorrow|[A-Z][a-z]+ \d{1,2})", text, re.IGNORECASE)
 
             if not date_matches:
@@ -317,16 +308,14 @@ class AmazonScraper:
 
             parsed_dates = [dateparser.parse(d, settings={"PREFER_DATES_FROM": "future", "STRICT_PARSING": False}) for d in date_matches]
 
-            # Filter out None results from dateparser and get the date part
             valid_dates = [d.date() for d in parsed_dates if d]
 
-            if not valid_dates: # Check if the list of actual date objects is empty
+            if not valid_dates:
                 return None
 
-            return min(valid_dates) # Now it's safe to call min
+            return min(valid_dates)
 
         except Exception as e:
-            # Log the specific text that failed to parse if it's helpful
             self.logger.error(f"Delivery date extraction failed for text snippet: '{text[:100]}...'", exc_info=True)
             return None
 

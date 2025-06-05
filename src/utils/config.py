@@ -4,27 +4,28 @@ from typing import Optional
 
 class Config:
     def __init__(self):
-        # Load environment variables from .env file
         load_dotenv()
         
-        # OpenAI Configuration
         self.OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
         if not self.OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY environment variable is not set")
         
-        # Amazon Configuration
         self.AMAZON_BASE_URL = os.getenv('AMAZON_BASE_URL', 'https://www.amazon.com')
         
-        # Rate Limiting Configuration
         self.MAX_REQUESTS_PER_MINUTE = int(os.getenv('MAX_REQUESTS_PER_MINUTE', '30'))
         self.REQUEST_DELAY_MIN = float(os.getenv('REQUEST_DELAY_MIN', '2'))
         self.REQUEST_DELAY_MAX = float(os.getenv('REQUEST_DELAY_MAX', '5'))
         
-        # Selenium Configuration
-        self.HEADLESS_MODE = os.getenv('HEADLESS_MODE', 'False').lower() == 'true'
+        # Browser Configuration
+        raw_headless_mode_env = os.getenv('HEADLESS_MODE', 'False')
+        # ---- START DEBUG LOGGING ----
+        print(f"[Config DEBUG] Raw HEADLESS_MODE from env: '{raw_headless_mode_env}' (Type: {type(raw_headless_mode_env)})")
+        # ---- END DEBUG LOGGING ----
+        self.HEADLESS_MODE = raw_headless_mode_env.lower() == 'true'
+        print(f"[Config DEBUG] Parsed HEADLESS_MODE: {self.HEADLESS_MODE} (Type: {type(self.HEADLESS_MODE)})")
+
         self.USER_AGENT = os.getenv('USER_AGENT', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
         
-        # Validate configuration
         self._validate_config()
 
     def _validate_config(self) -> None:

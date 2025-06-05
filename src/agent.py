@@ -66,7 +66,6 @@ def process_query(app, nlp_processor, scraper, rate_limiter, user_input, previou
         "previous_context": previous_context
     }
     
-    # Initial values
     ranked_products_final = []
     summary_final = None
     new_context_final = {}
@@ -74,7 +73,6 @@ def process_query(app, nlp_processor, scraper, rate_limiter, user_input, previou
     try:
         result = app.invoke(initial_state)
 
-        # Get products from the result state (this key should be the final output from the graph)
         processed_ranked_products = result.get("ranked_products", [])
 
         if processed_ranked_products:
@@ -87,20 +85,14 @@ def process_query(app, nlp_processor, scraper, rate_limiter, user_input, previou
             }
             ranked_products_final = processed_ranked_products
         else:
-            # No products after all processing (including LLM filtering)
             summary_final = "No relevant products found after validation."
-            # ranked_products_final remains []
-            # new_context_final remains {}
 
     except Exception as e_invoke:
-        # Log this exception properly in a real app
-        if scraper and hasattr(scraper, 'logger'): # Check if scraper and logger exist
+        if scraper and hasattr(scraper, 'logger'):
             scraper.logger.error(f"Exception during LangGraph app.invoke or subsequent processing: {e_invoke}", exc_info=True)
-        else: # Fallback logging if scraper or its logger is not available
+        else:
             print(f"Exception during LangGraph app.invoke or subsequent processing: {e_invoke}")
         summary_final = "An error occurred while processing your request."
-        # ranked_products_final, new_context_final remain empty.
-        # Not re-raising here to allow returning a 200 OK with the error message in summary.
     finally:
         if scraper:
             scraper.close()

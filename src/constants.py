@@ -8,4 +8,4 @@ MISSING_SCORE = 0.15
 MAX_LLM_VALIDATIONS_PER_RUN = 10
 
 # Number of top products to validate with LLM in the post-processing step
-TOP_N_FOR_LLM_VALIDATION = 10
+TOP_N_FOR_LLM_VALIDATION = 25
