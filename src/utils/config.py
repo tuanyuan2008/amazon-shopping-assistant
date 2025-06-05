@@ -4,7 +4,8 @@ from typing import Optional
 
 class Config:
     def __init__(self):
-        load_dotenv()
+        # Load environment variables from .env file, overriding existing env vars
+        load_dotenv(override=True)
         
         self.OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
         if not self.OPENAI_API_KEY:
