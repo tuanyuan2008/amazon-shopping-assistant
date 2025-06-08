@@ -135,7 +135,6 @@ class NLPProcessor:
             )
 
             llm_response = response.choices[0].message.content.strip().lower()
-            # self.logger.info(f"LLM relevance (yes/no) validation response: '{llm_response}'")
 
             if llm_response == "yes" or llm_response == "no":
                 return llm_response
