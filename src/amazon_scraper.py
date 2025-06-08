@@ -3,7 +3,7 @@ from typing import Dict, List, Optional
 import dateparser
 import logging
 import re
-import os
+from pathlib import Path
 from playwright.sync_api import sync_playwright, Playwright, Browser, Page
 from bs4 import BeautifulSoup
 
@@ -27,13 +27,24 @@ class AmazonScraper:
         self.browser: Optional[Browser] = None
         self.driver: Optional[Page] = None
 
-    def _get_render_chromium_path(self) -> str:
-        """Detect the Chromium binary path inside Render's user-level cache."""
-        base = "/opt/render/.cache/ms-playwright"
-        for entry in os.listdir(base):
-            if entry.startswith("chromium"):
-                return os.path.join(base, entry, "chrome-linux", "chrome")
-        raise FileNotFoundError("Chromium binary not found in Render cache")
+    def _get_playwright_chromium_path(self) -> str:
+        """Return the path to Chromium installed by Playwright (Docker-safe)."""
+        try:
+            # Best option: use built-in Playwright executable path (safe in Docker)
+            executable_path = self.playwright.chromium.executable_path
+            self.logger.info(f"Resolved Chromium path via playwright.chromium.executable_path: {executable_path}")
+            return executable_path
+        except AttributeError:
+            # Fallback: manually find it in ~/.cache/ms-playwright
+            chromium_dir = Path.home() / ".cache" / "ms-playwright"
+            if not chromium_dir.exists():
+                raise FileNotFoundError(f"Chromium not found at {chromium_dir} — did playwright install run?")
+            for entry in chromium_dir.iterdir():
+                if entry.name.startswith("chromium"):
+                    binary_path = entry / "chrome-linux" / "chrome"
+                    if binary_path.exists():
+                        return str(binary_path)
+            raise FileNotFoundError("Chromium binary not found in ~/.cache/ms-playwright")
 
     def _ensure_playwright_setup(self) -> None:
         """Initialize Playwright, launch browser, and create a new page if not already done."""
@@ -51,9 +62,8 @@ class AmazonScraper:
 
             self.logger.info(f"Attempting to launch Chromium with headless={self.config.HEADLESS_MODE} (Type: {type(self.config.HEADLESS_MODE)})")
 
-            # Use Render-compatible Chromium path
-            chromium_path = self._get_render_chromium_path()
-            self.logger.info(f"Launching with Chromium executable path: {chromium_path}")
+            chromium_path = self._get_playwright_chromium_path()
+            self.logger.info(f"Launching Chromium with executable path: {chromium_path}")
 
             self.browser = self.playwright.chromium.launch(
                 headless=self.config.HEADLESS_MODE,
