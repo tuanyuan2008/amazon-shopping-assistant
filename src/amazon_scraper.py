@@ -2,11 +2,8 @@ from datetime import date
 from typing import Dict, List, Optional
 import dateparser
 import logging
-import platform
-import subprocess
-import sys
 import re
-
+import os
 from playwright.sync_api import sync_playwright, Playwright, Browser, Page
 from bs4 import BeautifulSoup
 
@@ -30,6 +27,14 @@ class AmazonScraper:
         self.browser: Optional[Browser] = None
         self.driver: Optional[Page] = None
 
+    def _get_render_chromium_path(self) -> str:
+        """Detect the Chromium binary path inside Render's user-level cache."""
+        base = "/opt/render/.cache/ms-playwright"
+        for entry in os.listdir(base):
+            if entry.startswith("chromium"):
+                return os.path.join(base, entry, "chrome-linux", "chrome")
+        raise FileNotFoundError("Chromium binary not found in Render cache")
+
     def _ensure_playwright_setup(self) -> None:
         """Initialize Playwright, launch browser, and create a new page if not already done."""
         if self.driver:
@@ -44,12 +49,16 @@ class AmazonScraper:
                 "--disable-blink-features=AutomationControlled"
             ]
 
-            self.logger.info("Launching Playwright Chromium...")
-            # Log the effective HEADLESS_MODE value being used
             self.logger.info(f"Attempting to launch Chromium with headless={self.config.HEADLESS_MODE} (Type: {type(self.config.HEADLESS_MODE)})")
+
+            # Use Render-compatible Chromium path
+            chromium_path = self._get_render_chromium_path()
+            self.logger.info(f"Launching with Chromium executable path: {chromium_path}")
+
             self.browser = self.playwright.chromium.launch(
                 headless=self.config.HEADLESS_MODE,
-                args=chromium_args
+                args=chromium_args,
+                executable_path=chromium_path
             )
 
             user_agent = self.config.USER_AGENT if self.config.USER_AGENT else None
@@ -73,6 +82,7 @@ class AmazonScraper:
             self.browser = None
             self.driver = None
             raise
+
 
     def _get_page_results(self, page: int, first_url: Optional[str] = None) -> List[Dict]:
         """Get results from the current page."""
