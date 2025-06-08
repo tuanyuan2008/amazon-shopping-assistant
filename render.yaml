@@ -1,10 +1,8 @@
 services:
   - type: web
     name: amazon-shopping-assistant-api
-    env: python
-    buildCommand: |
-      pip install -r requirements.txt && python -m playwright install
-    startCommand: gunicorn app:app
+    env: docker
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: OPENAI_API_KEY
         sync: false
@@ -17,4 +15,4 @@ services:
       - key: REQUEST_DELAY_MIN
         value: "2"
       - key: REQUEST_DELAY_MAX
-        value: "5" 
+        value: "5"
