@@ -9,9 +9,12 @@ import os
 app = Flask(__name__)
 app.secret_key = os.urandom(24) # Kept for now, might be used by extensions
 
-# Initialize CORS, allowing all origins for now.
+# Configure CORS to only allow requests from GitHub Pages
 # For production, specify origins: CORS(app, origins=["http://localhost:3000"])
-CORS(app) 
+CORS(app, origins=[
+    "https://tuanyuan2008.github.io",
+    "http://localhost:5173"  # Keep local development working
+])
 
 # Initialize agent components once when the app starts
 # These are global and will be used by the /api/query endpoint

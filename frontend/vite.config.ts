@@ -15,4 +15,5 @@ export default defineConfig({
     // Optional: if you want to see more details during tests
     // reporters: ['verbose'], 
   },
+  base: '/amazon-shopping-assistant/',
 })

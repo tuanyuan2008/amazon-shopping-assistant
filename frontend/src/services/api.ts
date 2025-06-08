@@ -21,7 +21,7 @@ export interface ApiError {
   details?: any; // For additional error details if provided by backend
 }
 
-const API_BASE_URL = 'http://localhost:5001/api'; // Ensure this matches your backend URL
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
 
 export const fetchQueryResults = async (
   userInput: string,
