@@ -3,7 +3,7 @@ services:
     name: amazon-shopping-assistant-api
     env: python
     buildCommand: |
-      pip install -r requirements.txt && python -m playwright install --with-deps
+      pip install -r requirements.txt && python -m playwright install
     startCommand: gunicorn app:app
     envVars:
       - key: OPENAI_API_KEY
