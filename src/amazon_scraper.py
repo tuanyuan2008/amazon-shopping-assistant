@@ -181,7 +181,7 @@ class AmazonScraper:
                 if next_url:
                     if next_url.startswith('/'):
                         next_url = f"{self.config.AMAZON_BASE_URL}{next_url}"
-                    self.driver.goto(next_url)
+                    self.driver.goto(next_url, wait_until="domcontentloaded", timeout=60000)
                     page += 1
                     self.rate_limiter.wait()
                 else:
