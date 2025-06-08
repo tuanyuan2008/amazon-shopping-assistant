@@ -25,7 +25,7 @@ describe('SummaryDisplay Component', () => {
   });
 
   test('renders the summary text even when isLoading is true (showing stale summary while new one loads)', () => {
-    const mockSummary = 'This is a stale summary while a new one is loading.';
+    const mockSummary = 'This is a stale summary and a new one is loading.';
     render(<SummaryDisplay summary={mockSummary} isLoading={true} />);
     expect(screen.getByText(mockSummary)).toBeInTheDocument();
     expect(screen.getByText(/updating summary.../i)).toBeInTheDocument(); // Check for updating indicator

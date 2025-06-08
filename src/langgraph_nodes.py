@@ -1,5 +1,4 @@
-from typing import Dict, List # Added for type hints
-from src.constants import TOP_N_FOR_LLM_VALIDATION # Moved to top
+from src.constants import TOP_N_FOR_LLM_VALIDATION
 
 def parse_user_query(state: dict) -> dict:
     nlp = state["nlp_processor"]

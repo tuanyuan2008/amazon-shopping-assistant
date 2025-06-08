@@ -1,9 +1,8 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS # Import CORS
+from flask_cors import CORS
 from src.agent import (
     initialize_agent,
     process_query
-    # format_display_results and format_summary are no longer needed here
 )
 import os
 
@@ -20,7 +19,6 @@ nlp_processor, scraper, rate_limiter, graph_app = initialize_agent()
 
 @app.route('/', methods=['GET'])
 def home():
-    # This route now just confirms the API is running
     return jsonify({"message": "Backend API is running"})
 
 @app.route('/api/query', methods=['POST'])
@@ -30,12 +28,11 @@ def api_query():
         return jsonify({"error": "Invalid JSON payload"}), 400
 
     user_input = data.get('user_input')
-    previous_context = data.get('previous_context', {}) # Default to empty dict if not provided
+    previous_context = data.get('previous_context', {})
 
     if not user_input:
         return jsonify({"error": "user_input is required"}), 400
 
-    # Call the existing agent logic
     ranked_products, summary_text, new_context = process_query(
         graph_app, nlp_processor, scraper, rate_limiter, user_input, previous_context
     )

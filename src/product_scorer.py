@@ -61,7 +61,6 @@ class ProductScorer:
         score = 1.0
         explanations = []
         for name, (sub_score, explanation) in components.items():
-            # Penalize heavily if the product does not meet any explicit preference features.
             if sub_score == 0 and name == "preference":
                 score *= -1
                 continue

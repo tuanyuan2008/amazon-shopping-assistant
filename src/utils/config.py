@@ -1,6 +1,5 @@
 import os
 from dotenv import load_dotenv
-from typing import Optional
 
 class Config:
     def __init__(self):
