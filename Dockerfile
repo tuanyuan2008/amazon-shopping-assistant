@@ -24,4 +24,4 @@ WORKDIR /app
 EXPOSE 8000
 
 # Start server
-CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:8000", "--timeout", "120"]
+CMD ["gunicorn", "app:app", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "1", "--worker-class", "gthread", "--timeout", "600"]
