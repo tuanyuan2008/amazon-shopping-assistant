@@ -128,7 +128,7 @@ class AmazonScraper:
         
         return []
 
-    def search_products(self, query: str, filters: Dict, max_results: int = 100) -> List[Dict]:
+    def search_products(self, query: str, filters: Dict, max_results: int = 96) -> List[Dict]:
         """Search Amazon for products using a keyword and filter dict."""
         self._ensure_playwright_setup()
 
