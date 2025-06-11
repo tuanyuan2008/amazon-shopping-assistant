@@ -1,6 +1,5 @@
 import time
 import random
-from typing import Optional
 import logging
 
 class RateLimiter:

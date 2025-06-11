@@ -3,7 +3,6 @@ from typing import Dict, List, Optional
 import dateparser
 import logging
 import re
-from pathlib import Path
 from playwright.sync_api import sync_playwright, Playwright, Browser, Page
 from bs4 import BeautifulSoup
 
