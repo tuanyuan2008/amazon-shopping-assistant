@@ -27,25 +27,6 @@ class AmazonScraper:
         self.browser: Optional[Browser] = None
         self.driver: Optional[Page] = None
 
-    def _get_playwright_chromium_path(self) -> str:
-        """Return the path to Chromium installed by Playwright (Docker-safe)."""
-        try:
-            # Best option: use built-in Playwright executable path (safe in Docker)
-            executable_path = self.playwright.chromium.executable_path
-            self.logger.info(f"Resolved Chromium path via playwright.chromium.executable_path: {executable_path}")
-            return executable_path
-        except AttributeError:
-            # Fallback: manually find it in ~/.cache/ms-playwright
-            chromium_dir = Path.home() / ".cache" / "ms-playwright"
-            if not chromium_dir.exists():
-                raise FileNotFoundError(f"Chromium not found at {chromium_dir} — did playwright install run?")
-            for entry in chromium_dir.iterdir():
-                if entry.name.startswith("chromium"):
-                    binary_path = entry / "chrome-linux" / "chrome"
-                    if binary_path.exists():
-                        return str(binary_path)
-            raise FileNotFoundError("Chromium binary not found in ~/.cache/ms-playwright")
-
     def _ensure_playwright_setup(self) -> None:
         """Initialize Playwright, launch browser, and create a new page if not already done."""
         if self.driver:
@@ -56,19 +37,26 @@ class AmazonScraper:
         try:
             self.playwright = sync_playwright().start()
 
+            # More aggressive arguments for headless browser to reduce memory usage
             chromium_args = [
-                "--disable-blink-features=AutomationControlled"
+                "--no-sandbox", # Crucial for Docker environments
+                "--disable-setuid-sandbox",
+                "--disable-gpu", # Often helps with stability
+                "--disable-dev-shm-usage", # Important for limited /dev/shm
+                "--single-process", # Runs all tabs in one process (can be risky but saves memory)
+                "--disable-blink-features=AutomationControlled",
+                "--disable-features=site-per-process",
+                "--disable-site-isolation-trials",
+                "--incognito", # Start in incognito mode to avoid caching issues
             ]
 
             self.logger.info(f"Attempting to launch Chromium with headless={self.config.HEADLESS_MODE} (Type: {type(self.config.HEADLESS_MODE)})")
 
-            chromium_path = self._get_playwright_chromium_path()
-            self.logger.info(f"Launching Chromium with executable path: {chromium_path}")
-
+            # Let Playwright find its own executable path, as it's installed via Dockerfile
             self.browser = self.playwright.chromium.launch(
                 headless=self.config.HEADLESS_MODE,
                 args=chromium_args,
-                executable_path=chromium_path
+                # executable_path is no longer explicitly set here
             )
 
             user_agent = self.config.USER_AGENT if self.config.USER_AGENT else None

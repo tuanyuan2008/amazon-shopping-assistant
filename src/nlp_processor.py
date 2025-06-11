@@ -127,8 +127,8 @@ class NLPProcessor:
             response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": "Please classify the product. Respond with ONLY 'yes' or 'no'."}
+                    {"role": "system", "content": prompt_template},
+                    {"role": "user", "content": f"Product title: {product_title}\nSearch term: {search_term}"}
                 ],
                 temperature=0,
                 max_tokens=3
