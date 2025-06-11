@@ -1,7 +1,7 @@
+from typing import Dict, List
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import openai
 from .utils.config import Config
@@ -128,7 +128,7 @@ class NLPProcessor:
                 model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": prompt},
-                    {"role": "user", "content": "Please classify the product. Respond with ONLY 'yes' or 'no'."}
+                    {"role": "user", "content": f"Product title: {product_title}\nSearch term: {search_term}"}
                 ],
                 temperature=0,
                 max_tokens=3
@@ -194,10 +194,16 @@ class NLPProcessor:
 
         for product in products_to_validate:
             product_url = product.get("url")
-            if product_url and llm_decisions_map.get(product_url) == "yes":
+            llm_decision = llm_decisions_map.get(product_url)
+            
+            if product_url and llm_decision == "yes":
                 final_filtered_products.append(product)
-            elif not product_url: # Product missing URL cannot be reliably mapped or used.
-                 self.logger.warning(f"Product '{product.get('title')}' missing URL, cannot map LLM decision. Excluding.")
+            elif product_url:
+                # Log products that were explicitly classified as "no" or defaulted to "unknown"
+                self.logger.info(f"Product excluded by LLM validation (decision: {llm_decision}): '{product.get('title')}' - {product.get('url')}")
+            else: 
+                # This case handles products missing a URL
+                self.logger.warning(f"Product '{product.get('title')}' missing URL, cannot map LLM decision. Excluding.")
 
         self.logger.info(f"LLM validation complete. Kept {len(final_filtered_products)} out of {len(products_to_validate)} top products.")
         return final_filtered_products
