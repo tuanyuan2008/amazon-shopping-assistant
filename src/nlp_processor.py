@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, List
 import logging
 from datetime import datetime
 from pathlib import Path
