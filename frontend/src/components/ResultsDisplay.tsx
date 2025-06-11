@@ -10,10 +10,9 @@ interface Product {
 
 interface ResultsDisplayProps {
   products: Product[];
-  isLoading: boolean;
 }
 
-const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ products, isLoading }) => {
+const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ products }) => {
   const [visibleCount, setVisibleCount] = useState(10);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [expandedNotes, setExpandedNotes] = useState<{ [key: number]: boolean }>({});

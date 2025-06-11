@@ -283,7 +283,8 @@ class AmazonScraper:
         whole = element.select_one("span.a-price-whole")
         fraction = element.select_one("span.a-price-fraction")
         if whole and fraction:
-            return float(f"{whole.text}{fraction.text}")
+            cleaned_whole = whole.text.replace(',', '')
+            return float(f"{cleaned_whole}{fraction.text}")
         return None
 
     def _extract_rating(self, element) -> Optional[float]:

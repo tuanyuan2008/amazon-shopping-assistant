@@ -97,7 +97,7 @@ function App() {
               <SummaryDisplay summary={summary} isLoading={false} />
             </section>
             <section className="results-section w-full">
-              <ResultsDisplay products={products} isLoading={false} />
+              <ResultsDisplay products={products} />
             </section>
           </div>
         )}
