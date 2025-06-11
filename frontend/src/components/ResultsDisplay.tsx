@@ -97,7 +97,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ products, isLoading }) 
               </button>
               {expandedNotes[index] && (
                 <div className="transition-all duration-300 bg-baby-robin-blue/20 border-l-4 border-baby-robin-blue-dark/40 rounded-xl text-sm text-slate-800 p-3 mt-1">
-                  <p className="italic"><strong className="font-medium">Note:</strong> {product.ranking_explanation}</p>
+                  <p className="italic whitespace-pre-wrap"><strong className="font-medium">Note:</strong> {product.ranking_explanation.replace(/Note: - /g, '').replace(/ - /g, '\n- ')}</p>
                 </div>
               )}
             </div>
@@ -111,7 +111,7 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ products, isLoading }) 
         <div className="flex justify-center mt-8">
           <button
             onClick={() => setVisibleCount(c => c + 10)}
-            className="px-8 py-3 rounded-xl bg-baby-robin-blue-dark text-white font-semibold shadow hover:bg-baby-robin-blue transition-colors"
+            className="px-8 py-3 rounded-full bg-baby-robin-blue-dark text-white font-semibold shadow hover:bg-baby-robin-blue focus:outline-none focus:ring-2 focus:ring-baby-robin-blue-dark focus:ring-offset-2 transition-all duration-200 disabled:bg-baby-robin-blue flex-shrink-0"
           >
             Show More
           </button>

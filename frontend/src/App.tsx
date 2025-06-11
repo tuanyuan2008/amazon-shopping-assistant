@@ -47,7 +47,7 @@ function App() {
   return (
     // The outermost div: In pre-search, centers its child (the div below) vertically and horizontally.
     // Otherwise, it only centers its child horizontally (items-center) and lets content flow from top.
-    <div className={`min-h-screen bg-baby-robin-blue text-slate-800 flex flex-col p-4 ${isPreSearchState ? 'justify-center items-center' : 'items-center'}`}>
+    <div className={`min-h-screen bg-baby-robin-blue text-slate-800 flex flex-col p-4 ${isPreSearchState ? 'justify-center items-center' : 'items-center justify-between'}`}>
       {/* This div wraps all content. In pre-search, it becomes a flex container to center the query-section.
           It takes w-full and max-w-4xl as before.
           The 'mx-auto' is for non-pre-search state to center it when header/footer are visible.
@@ -63,7 +63,7 @@ function App() {
           </header>
         )}
 
-        <section className={`query-section ${isPreSearchState ? '' : 'mb-12'}`}>
+        <section className={`query-section w-full max-w-4xl mx-auto ${isPreSearchState ? '' : 'mb-12'}`}>
           <QueryInput
             currentQuery={currentQuery}
             setCurrentQuery={setCurrentQuery}
@@ -76,7 +76,6 @@ function App() {
         {isLoading && !isPreSearchState && (
           <div className="w-full flex flex-col items-center mb-12">
             <div className="h-1.5 w-32 rounded-full bg-gradient-to-r from-baby-robin-blue/40 to-baby-robin-blue-dark/40 opacity-60 animate-pulse mb-4"></div>
-            <p className="text-lg text-slate-600">Fetching results...</p>
           </div>
         )}
 
@@ -109,8 +108,9 @@ function App() {
             </div>
         )}
 
+        {/* Adjusted footer for stick-to-bottom behavior */}
         {!isPreSearchState && (
-          <footer className="text-center mt-16 py-8 text-sm text-slate-500">
+          <footer className="text-center py-8 text-sm text-slate-500">
             <p>Shopping Assistant - Tailwind Version</p>
           </footer>
         )}
