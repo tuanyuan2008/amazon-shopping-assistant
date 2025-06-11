@@ -200,7 +200,7 @@ class NLPProcessor:
                 final_filtered_products.append(product)
             elif product_url:
                 # Log products that were explicitly classified as "no" or defaulted to "unknown"
-                self.logger.info(f"Product excluded by LLM validation (decision: {llm_decision}): '{product.get('title')}'")
+                self.logger.info(f"Product excluded by LLM validation (decision: {llm_decision}): '{product.get('url')}'")
             else: 
                 # This case handles products missing a URL
                 self.logger.warning(f"Product '{product.get('title')}' missing URL, cannot map LLM decision. Excluding.")
