@@ -56,14 +56,14 @@ function App() {
       */}
       <div className={`w-full max-w-3xl ${isPreSearchState ? 'flex flex-col justify-center items-center' : 'mx-auto'}`}>
         {!isPreSearchState && (
-          <header className="text-center my-8">
-            <h1 className="text-4xl md:text-5xl font-bold text-baby-robin-blue-dark">
-              Amazon Shopping Assistant
+          <header className="text-center py-10">
+            <h1 className="text-5xl md:text-6xl font-bold text-baby-robin-blue-dark">
+              Shopping Assistant
             </h1>
           </header>
         )}
 
-        <section className={`query-section p-6 ${isPreSearchState ? '' : 'mb-8'}`}>
+        <section className={`query-section p-8 ${isPreSearchState ? '' : 'mb-12'}`}>
           <QueryInput
             currentQuery={currentQuery}
             setCurrentQuery={setCurrentQuery}
@@ -71,9 +71,17 @@ function App() {
             isLoading={isLoading}
           />
         </section>
+        
+        {/* Loading indicator moved here */}
+        {isLoading && !isPreSearchState && (
+          <div className="w-full flex flex-col items-center mb-12">
+            <div className="h-1.5 w-32 rounded-full bg-gradient-to-r from-baby-robin-blue/40 to-baby-robin-blue-dark/40 opacity-60 animate-pulse mb-4"></div>
+            <p className="text-lg text-slate-600">Fetching results...</p>
+          </div>
+        )}
 
         {error && (
-          <section className="error-section mb-8 p-4 bg-red-100 border border-red-400 text-red-700 rounded-xl shadow-md">
+          <section className="error-section mb-12 p-6 bg-red-100 border border-red-400 text-red-700 rounded-xl shadow-md">
             <h2 className="text-xl font-semibold mb-2">Error</h2>
             <p>{error.message}</p>
             {error.details && 
@@ -84,29 +92,26 @@ function App() {
           </section>
         )}
 
-        {!isPreSearchState && !error && (isLoading || products.length > 0 || summary) && (
+        {!isPreSearchState && !error && !isLoading && (products.length > 0 || summary) && (
           <>
-            <section className="summary-section w-full max-w-3xl mx-auto mb-8">
-              <SummaryDisplay summary={summary} isLoading={isLoading && !summary} />
+            <section className="summary-section w-full max-w-3xl mx-auto mb-12">
+              <SummaryDisplay summary={summary} isLoading={false} />
             </section>
-            <div className="w-full flex justify-center mb-8">
-              <div className="h-1 w-24 rounded-full bg-gradient-to-r from-baby-robin-blue/40 to-baby-robin-blue-dark/40 opacity-60"></div>
-            </div>
             <section className="results-section w-full max-w-3xl mx-auto">
-              <ResultsDisplay products={products} isLoading={isLoading && products.length === 0} />
+              <ResultsDisplay products={products} isLoading={false} />
             </section>
           </>
         )}
         
         {!isPreSearchState && !error && !isLoading && products.length === 0 && !summary && (
-             <div className="text-center p-6 bg-white rounded-xl shadow-lg">
+             <div className="text-center p-8 bg-white rounded-xl shadow-lg">
                 <p className="text-slate-500 text-lg">Enter a query above to start searching!</p>
             </div>
         )}
 
         {!isPreSearchState && (
-          <footer className="text-center mt-12 py-6 text-sm text-slate-500">
-            <p>Amazon Shopping Assistant UI - Tailwind Version</p>
+          <footer className="text-center mt-16 py-8 text-sm text-slate-500">
+            <p>Shopping Assistant - Tailwind Version</p>
           </footer>
         )}
       </div>
