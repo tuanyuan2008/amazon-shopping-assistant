@@ -236,9 +236,12 @@ class AmazonScraper:
 
                 title = None
                 for selector in [
+                    "h2.a-size-base-plus.a-spacing-none.a-color-base.a-text-normal span",
                     "h2 a span",
                     ".a-size-base-plus.a-color-base",
                     ".a-size-medium.a-color-base",
+                    "span.a-text-normal",
+                    "a.a-link-normal.a-text-normal"
                 ]:
                     title = self._extract_text(item, selector)
                     if title:
@@ -251,14 +254,14 @@ class AmazonScraper:
                 price = self._extract_price(item)
                 rating = self._extract_rating(item)
                 review_count = self._extract_review_count(item)
-
+                url = self._extract_url(item)
                 product = {
                     "title": title,
                     "price": f"{price:.2f}" if price else "Price not available",
                     "rating": f"{rating:.1f} out of 5 stars" if rating else "No rating",
                     "review_count": f"{review_count:,}" if review_count else "No reviews",
                     "prime": self._is_prime(item),
-                    "url": self._extract_url(item) or "URL not available",
+                    "url": url or "URL not available", # Use extracted url, fallback if None
                     "image_url": self._extract_image_url(item),
                     "price_per_count": self._extract_inline_unit_price(item),
                     "delivery_estimate": self._extract_inline_delivery_estimate(item),

@@ -127,7 +127,7 @@ class NLPProcessor:
             response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": prompt_template},
+                    {"role": "system", "content": prompt},
                     {"role": "user", "content": f"Product title: {product_title}\nSearch term: {search_term}"}
                 ],
                 temperature=0,
@@ -200,7 +200,7 @@ class NLPProcessor:
                 final_filtered_products.append(product)
             elif product_url:
                 # Log products that were explicitly classified as "no" or defaulted to "unknown"
-                self.logger.info(f"Product excluded by LLM validation (decision: {llm_decision}): '{product.get('url')}'")
+                self.logger.info(f"Product excluded by LLM validation (decision: {llm_decision}): '{product.get('title')}' - {product.get('url')}")
             else: 
                 # This case handles products missing a URL
                 self.logger.warning(f"Product '{product.get('title')}' missing URL, cannot map LLM decision. Excluding.")
