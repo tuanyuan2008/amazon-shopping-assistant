@@ -49,12 +49,12 @@ function App() {
     // Otherwise, it only centers its child horizontally (items-center) and lets content flow from top.
     <div className={`min-h-screen bg-baby-robin-blue text-slate-800 flex flex-col p-4 ${isPreSearchState ? 'justify-center items-center' : 'items-center'}`}>
       {/* This div wraps all content. In pre-search, it becomes a flex container to center the query-section.
-          It takes w-full and max-w-3xl as before.
+          It takes w-full and max-w-4xl as before.
           The 'mx-auto' is for non-pre-search state to center it when header/footer are visible.
           In pre-search, items-center will horizontally center query-section (if it's not w-full).
           justify-center will vertically center query-section.
       */}
-      <div className={`w-full max-w-3xl ${isPreSearchState ? 'flex flex-col justify-center items-center' : 'mx-auto'}`}>
+      <div className={`w-full max-w-4xl px-8 ${isPreSearchState ? 'flex flex-col justify-center items-center' : 'mx-auto'}`}>
         {!isPreSearchState && (
           <header className="text-center py-10">
             <h1 className="text-5xl md:text-6xl font-bold text-baby-robin-blue-dark">
@@ -63,7 +63,7 @@ function App() {
           </header>
         )}
 
-        <section className={`query-section p-8 ${isPreSearchState ? '' : 'mb-12'}`}>
+        <section className={`query-section ${isPreSearchState ? '' : 'mb-12'}`}>
           <QueryInput
             currentQuery={currentQuery}
             setCurrentQuery={setCurrentQuery}
@@ -93,14 +93,14 @@ function App() {
         )}
 
         {!isPreSearchState && !error && !isLoading && (products.length > 0 || summary) && (
-          <>
-            <section className="summary-section w-full max-w-3xl mx-auto mb-12">
+          <div className="w-full max-w-4xl mx-auto">
+            <section className="summary-section w-full mb-12">
               <SummaryDisplay summary={summary} isLoading={false} />
             </section>
-            <section className="results-section w-full max-w-3xl mx-auto">
+            <section className="results-section w-full">
               <ResultsDisplay products={products} isLoading={false} />
             </section>
-          </>
+          </div>
         )}
         
         {!isPreSearchState && !error && !isLoading && products.length === 0 && !summary && (

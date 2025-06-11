@@ -22,15 +22,15 @@ const SummaryDisplay: React.FC<SummaryDisplayProps> = ({ summary, isLoading }) =
 
   return (
     <div
-      className="summary-container relative p-8 rounded-2xl shadow-xl backdrop-blur-md bg-white/60 border border-white/30"
+      className="summary-container relative w-full rounded-2xl shadow-xl backdrop-blur-md bg-white/60 border border-white/30"
       style={{ boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.10)' }}
     >
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 px-8 pt-8">
         <h2 className="text-2xl md:text-3xl font-bold text-baby-robin-blue-dark tracking-tight" style={{ fontFamily: 'Nunito, ui-sans-serif, system-ui' }}>
           Summary
         </h2>
       </div>
-      <div className="mb-2">{content}</div>
+      <div className="mb-2 px-8 pb-8">{content}</div>
     </div>
   );
 };

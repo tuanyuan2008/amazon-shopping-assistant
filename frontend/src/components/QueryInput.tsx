@@ -28,7 +28,7 @@ const QueryInput: React.FC<QueryInputProps> = ({
 
   return (
     <form onSubmit={handleSubmit} className="w-full flex justify-center items-center py-4">
-      <div className="flex w-full max-w-3xl items-center bg-white/80 backdrop-blur-sm rounded-full shadow-lg border border-slate-200 px-3 py-2">
+      <div className="flex w-full items-center bg-white/80 backdrop-blur-sm rounded-full shadow-lg border border-slate-200 px-3 py-2">
         <span className="pl-4 pr-3 text-slate-400 flex-shrink-0">
           {/* Minimalist search icon (outline) */}
           <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

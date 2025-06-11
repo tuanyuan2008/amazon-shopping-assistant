@@ -41,16 +41,16 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ products, isLoading }) 
 
   return (
     <div className="results-area space-y-8">
-      <h2 className="text-2xl md:text-3xl font-bold text-baby-robin-blue-dark mb-6 tracking-tight" style={{ fontFamily: 'Nunito, ui-sans-serif, system-ui' }}>
+      <h2 className="text-2xl md:text-3xl font-bold text-baby-robin-blue-dark mb-6 tracking-tight px-8" style={{ fontFamily: 'Nunito, ui-sans-serif, system-ui' }}>
         Results
       </h2>
       {visibleProducts.map((product, index) => (
         <div 
           key={index} 
-          className="product-item relative bg-white/90 backdrop-blur-md p-6 rounded-2xl shadow-lg border border-white/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-xl hover:bg-white/95 group"
+          className="product-item relative bg-white/90 backdrop-blur-md rounded-2xl shadow-lg border border-white/30 transition-all duration-300 hover:scale-[1.01] hover:shadow-xl hover:bg-white/95 group"
           style={{ fontFamily: 'Nunito, ui-sans-serif, system-ui' }}
         >
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2 px-8 pt-8">
             <h3 className="text-xl font-bold text-baby-robin-blue-dark group-hover:text-baby-robin-blue-dark transition-colors">
               <a 
                 href={product.url} 
@@ -74,36 +74,36 @@ const ResultsDisplay: React.FC<ResultsDisplayProps> = ({ products, isLoading }) 
                 <span className="text-green-500 font-semibold">Copied!</span>
               ) : (
                 <>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="inline w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16h8M8 12h8m-7 8h6a2 2 0 002-2V6a2 2 0 00-2-2H8a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="inline w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
                   <span>Copy</span>
                 </>
               )}
             </button>
           </div>
-          <div className="flex flex-wrap items-center gap-4 mb-2">
+          <div className="flex flex-wrap items-center gap-4 mb-2 px-8">
             <span className="text-lg text-green-700 font-bold group-hover:text-green-800">${product.price || 'N/A'}</span>
             {product.price_per_count && (
               <span className="text-xs text-slate-600 bg-slate-100 rounded px-2 py-0.5 group-hover:text-slate-800">{product.price_per_count}</span>
             )}
           </div>
           {product.ranking_explanation && (
-            <div className="ranking-explanation mt-3">
+            <div className="ranking-explanation mt-3 px-8 pb-8">
               <button
                 onClick={() => toggleNote(index)}
                 className="mb-2 text-baby-robin-blue-dark hover:underline text-xs font-semibold focus:outline-none"
                 aria-label={expandedNotes[index] ? 'Collapse note' : 'Expand note'}
               >
-                {expandedNotes[index] ? "Hide Agent's Note" : "Show Agent's Note"}
+                {expandedNotes[index] ? "Hide Note" : "Show Note"}
               </button>
               {expandedNotes[index] && (
                 <div className="transition-all duration-300 bg-baby-robin-blue/20 border-l-4 border-baby-robin-blue-dark/40 rounded-xl text-sm text-slate-800 p-3 mt-1">
-                  <p className="italic"><strong className="font-medium">Agent's Note:</strong> {product.ranking_explanation}</p>
+                  <p className="italic"><strong className="font-medium">Note:</strong> {product.ranking_explanation}</p>
                 </div>
               )}
             </div>
           )}
           {index < visibleProducts.length - 1 && (
-            <div className="absolute left-6 right-6 bottom-[-1.5rem] h-0.5 bg-gradient-to-r from-baby-robin-blue/10 via-baby-robin-blue/30 to-baby-robin-blue/10 opacity-60 rounded-full" />
+            <div className="absolute left-8 right-8 bottom-[-1.5rem] h-0.5 bg-gradient-to-r from-baby-robin-blue/10 via-baby-robin-blue/30 to-baby-robin-blue/10 opacity-60 rounded-full" />
           )}
         </div>
       ))}
