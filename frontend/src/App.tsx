@@ -47,23 +47,23 @@ function App() {
   return (
     // The outermost div: In pre-search, centers its child (the div below) vertically and horizontally.
     // Otherwise, it only centers its child horizontally (items-center) and lets content flow from top.
-    <div className={`min-h-screen bg-baby-robin-blue text-slate-800 flex flex-col p-4 ${isPreSearchState ? 'justify-center items-center' : 'items-center'}`}>
+    <div className={`min-h-screen bg-baby-robin-blue text-slate-800 flex flex-col p-4 ${isPreSearchState ? 'justify-center items-center' : 'items-center justify-between'}`}>
       {/* This div wraps all content. In pre-search, it becomes a flex container to center the query-section.
-          It takes w-full and max-w-3xl as before.
+          It takes w-full and max-w-4xl as before.
           The 'mx-auto' is for non-pre-search state to center it when header/footer are visible.
           In pre-search, items-center will horizontally center query-section (if it's not w-full).
           justify-center will vertically center query-section.
       */}
-      <div className={`w-full max-w-3xl ${isPreSearchState ? 'flex flex-col justify-center items-center' : 'mx-auto'}`}>
+      <div className={`w-full max-w-4xl px-8 ${isPreSearchState ? 'flex flex-col justify-center items-center' : 'mx-auto'}`}>
         {!isPreSearchState && (
-          <header className="text-center my-8">
-            <h1 className="text-4xl md:text-5xl font-bold text-baby-robin-blue-dark">
-              Amazon Shopping Assistant
+          <header className="text-center py-10">
+            <h1 className="text-5xl md:text-6xl font-bold text-baby-robin-blue-dark">
+              Shopping Assistant
             </h1>
           </header>
         )}
 
-        <section className={`query-section p-6 ${isPreSearchState ? '' : 'mb-8'}`}>
+        <section className={`query-section w-full max-w-4xl mx-auto ${isPreSearchState ? '' : 'mb-12'}`}>
           <QueryInput
             currentQuery={currentQuery}
             setCurrentQuery={setCurrentQuery}
@@ -71,9 +71,16 @@ function App() {
             isLoading={isLoading}
           />
         </section>
+        
+        {/* Loading indicator moved here */}
+        {isLoading && !isPreSearchState && (
+          <div className="w-full flex flex-col items-center mb-12">
+            <div className="h-1.5 w-32 rounded-full bg-gradient-to-r from-baby-robin-blue/40 to-baby-robin-blue-dark/40 opacity-60 animate-pulse mb-4"></div>
+          </div>
+        )}
 
         {error && (
-          <section className="error-section mb-8 p-4 bg-red-100 border border-red-400 text-red-700 rounded-xl shadow-md">
+          <section className="error-section mb-12 p-6 bg-red-100 border border-red-400 text-red-700 rounded-xl shadow-md">
             <h2 className="text-xl font-semibold mb-2">Error</h2>
             <p>{error.message}</p>
             {error.details && 
@@ -84,29 +91,27 @@ function App() {
           </section>
         )}
 
-        {!isPreSearchState && !error && (isLoading || products.length > 0 || summary) && (
-          <>
-            <section className="summary-section w-full max-w-3xl mx-auto mb-8">
-              <SummaryDisplay summary={summary} isLoading={isLoading && !summary} />
+        {!isPreSearchState && !error && !isLoading && (products.length > 0 || summary) && (
+          <div className="w-full max-w-4xl mx-auto">
+            <section className="summary-section w-full mb-12">
+              <SummaryDisplay summary={summary} isLoading={false} />
             </section>
-            <div className="w-full flex justify-center mb-8">
-              <div className="h-1 w-24 rounded-full bg-gradient-to-r from-baby-robin-blue/40 to-baby-robin-blue-dark/40 opacity-60"></div>
-            </div>
-            <section className="results-section w-full max-w-3xl mx-auto">
-              <ResultsDisplay products={products} isLoading={isLoading && products.length === 0} />
+            <section className="results-section w-full">
+              <ResultsDisplay products={products} isLoading={false} />
             </section>
-          </>
+          </div>
         )}
         
         {!isPreSearchState && !error && !isLoading && products.length === 0 && !summary && (
-             <div className="text-center p-6 bg-white rounded-xl shadow-lg">
+             <div className="text-center p-8 bg-white rounded-xl shadow-lg">
                 <p className="text-slate-500 text-lg">Enter a query above to start searching!</p>
             </div>
         )}
 
+        {/* Adjusted footer for stick-to-bottom behavior */}
         {!isPreSearchState && (
-          <footer className="text-center mt-12 py-6 text-sm text-slate-500">
-            <p>Amazon Shopping Assistant UI - Tailwind Version</p>
+          <footer className="text-center py-8 text-sm text-slate-500">
+            <p>Shopping Assistant - Tailwind Version</p>
           </footer>
         )}
       </div>
