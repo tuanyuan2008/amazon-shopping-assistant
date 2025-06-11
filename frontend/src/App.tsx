@@ -63,7 +63,7 @@ function App() {
           </header>
         )}
 
-        <section className={`query-section w-full max-w-4xl mx-auto ${isPreSearchState ? '' : 'mb-12'}`}>
+        <section className={`query-section p-6 ${isPreSearchState ? '' : 'mb-8'}`}>
           <QueryInput
             currentQuery={currentQuery}
             setCurrentQuery={setCurrentQuery}
