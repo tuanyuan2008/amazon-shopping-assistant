@@ -86,11 +86,23 @@ class AmazonScraper:
         max_retries = 2
         for attempt in range(max_retries):
             try:
-                self.driver.wait_for_selector("[data-component-type='s-search-result']", timeout=10000)
+                # Increased timeout for pages that might load slower (like page 2+)
+                self.driver.wait_for_selector("[data-component-type='s-search-result']", timeout=15000)
             except Exception as e:
                 self.logger.warning(f"Timeout waiting for page results selector on page {page}, attempt {attempt + 1}: {e}")
+                
+                # Take a screenshot on the first failure to see what the page looks like
+                if attempt == 0:
+                    screenshot_path = f"debug_page_{page}_failure.png"
+                    try:
+                        self.driver.screenshot(path=screenshot_path)
+                        self.logger.info(f"Saved debug screenshot to {screenshot_path}")
+                    except Exception as screenshot_e:
+                        self.logger.error(f"Failed to save screenshot: {screenshot_e}")
+
                 if attempt < max_retries - 1:
-                    self.driver.reload()
+                    self.logger.info("Reloading page and retrying...")
+                    self.driver.reload(wait_until="domcontentloaded")
                     continue
                 else:
                     self.logger.error(f"Failed to load page {page} after multiple retries.")
@@ -149,30 +161,31 @@ class AmazonScraper:
                 self.driver.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 self.rate_limiter.wait()
 
-                next_button_handle = None
-                for selector in ["a.s-pagination-next", "a[href*='page=']"]:
-                    button_handles = self.driver.query_selector_all(selector)
-                    for handle in button_handles:
-                        class_attr = handle.get_attribute("class") or ""
-                        if "s-pagination-disabled" not in class_attr:
-                            next_button_handle = handle
-                            break
-                    if next_button_handle:
-                        break
+                # A more direct and robust way to find the enabled 'next' button.
+                # It looks for an 'a' tag that has the 's-pagination-next' class but is not disabled.
+                next_button_selector = "a.s-pagination-item.s-pagination-next:not(.s-pagination-disabled)"
+                next_button_handle = self.driver.query_selector(next_button_selector)
 
                 if not next_button_handle:
                     self.logger.info("No more results available (next button not found or disabled)")
                     break
 
-                next_url = next_button_handle.get_attribute("href")
-                if next_url:
-                    if next_url.startswith('/'):
-                        next_url = f"{self.config.AMAZON_BASE_URL}{next_url}"
-                    self.driver.goto(next_url, wait_until="domcontentloaded", timeout=60000)
+                try:
+                    self.logger.info("Clicking the next page button.")
+                    # Use expect_navigation to reliably wait for the page load after the click.
+                    with self.driver.expect_navigation(wait_until="domcontentloaded", timeout=60000):
+                        next_button_handle.click()
+                    
                     page += 1
                     self.rate_limiter.wait()
-                else:
-                    self.logger.info("Next button found but no href attribute.")
+                except Exception as e:
+                    self.logger.error(f"Failed to click or navigate to the next page: {e}", exc_info=True)
+                    # Add a screenshot for debugging if the click/navigation fails
+                    try:
+                        self.driver.screenshot(path="debug_page_click_fail.png")
+                        self.logger.info("Saved debug screenshot to debug_page_click_fail.png")
+                    except Exception as screenshot_e:
+                        self.logger.error(f"Failed to save screenshot on click failure: {screenshot_e}")
                     break
 
             self.logger.info(f"Found {len(results)} products total")
