@@ -234,12 +234,12 @@ class AmazonScraper:
 
                 title = None
                 for selector in [
-                    "h2.a-size-base-plus.a-spacing-none.a-color-base.a-text-normal span",
-                    "h2 a span",
+                    "h2.a-size-base-plus.a-spacing-none.a-color-base.a-text-normal",
+                    "h2 a",
                     ".a-size-base-plus.a-color-base",
                     ".a-size-medium.a-color-base",
+                    "a.a-link-normal.a-text-normal",
                     "span.a-text-normal",
-                    "a.a-link-normal.a-text-normal"
                 ]:
                     title = self._extract_text(item, selector)
                     if title:
