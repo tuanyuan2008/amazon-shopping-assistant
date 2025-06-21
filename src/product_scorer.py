@@ -30,7 +30,7 @@ class ProductScorer:
         scored = []
         all_non_positive_scores = True
         for product in products:
-            score, explanation = self._calculate_product_score(product, filters, preferences, products, search_term)
+            score, explanation = self._calculate_product_score(product, filters, preferences, products)
             scored.append({
                 **product,
                 "score": score,
@@ -46,17 +46,25 @@ class ProductScorer:
         product: Dict, 
         filters: Dict, 
         preferences: Dict, 
-        all_products: List[Dict],
-        search_term: str
+        all_products: List[Dict]
     ) -> Tuple[float, str]:
         """Calculate the overall score for a product."""
+        
         components = {
-            "preference": self._calculate_preference_score(product, preferences, search_term),
+            "preference": self._calculate_preference_score(product, preferences),
             "price": self._calculate_price_score(product, filters, all_products),
             "rating": self._calculate_rating_score(product, filters),
             "reviews": self._calculate_review_score(product, filters),
             "delivery": self._calculate_delivery_score(product, filters),
         }
+
+        # Check for out-of-stock products (no price and delivery score of 0)
+        price_score = components["price"][0]
+        delivery_score = components["delivery"][0]
+        
+        if price_score == MISSING_SCORE and delivery_score == 0.0:
+            self.logger.info(f"Out-of-stock product detected: {product.get('title', 'Unknown')}")
+            return 0.0, f"Product score: 0.00 (out of stock - no price and delivery score: {delivery_score:.2f})"
 
         score = 1.0
         explanations = []
@@ -81,7 +89,7 @@ class ProductScorer:
         except (ValueError, AttributeError):
             return None
 
-    def _calculate_preference_score(self, product: Dict, preferences: Dict, search_term: str) -> Tuple[float, str]:
+    def _calculate_preference_score(self, product: Dict, preferences: Dict) -> Tuple[float, str]:
         product_title_lower = product.get('title', '').lower()
         features = preferences.get('features', [])
 
