@@ -233,16 +233,26 @@ class AmazonScraper:
                     continue
 
                 title = None
+                
+                # First try to get brand name from the separate h2 element
+                brand_element = item.select_one("h2.a-size-mini.s-line-clamp-1 span.a-size-base-plus.a-color-base")
+                brand_name = brand_element.text.strip() if brand_element else ""
+                
+                # Then get the product name from the main title h2
                 for selector in [
-                    "h2.a-size-base-plus.a-spacing-none.a-color-base.a-text-normal",
+                    "h2.a-size-base-plus.a-spacing-none.a-color-base.a-text-normal span",
                     "h2 a",
                     ".a-size-base-plus.a-color-base",
                     ".a-size-medium.a-color-base",
                     "a.a-link-normal.a-text-normal",
                     "span.a-text-normal",
                 ]:
-                    title = self._extract_text(item, selector)
-                    if title:
+                    product_name = self._extract_text(item, selector)
+                    if product_name:
+                        if brand_name and brand_name not in product_name:
+                            title = f"{brand_name} {product_name}"
+                        else:
+                            title = product_name
                         break
                 
                 if not title:
