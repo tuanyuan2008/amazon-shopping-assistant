@@ -90,15 +90,6 @@ class AmazonScraper:
                 self.driver.wait_for_selector("[data-component-type='s-search-result']", timeout=15000)
             except Exception as e:
                 self.logger.warning(f"Timeout waiting for page results selector on page {page}, attempt {attempt + 1}: {e}")
-                
-                # Take a screenshot on the first failure to see what the page looks like
-                if attempt == 0:
-                    screenshot_path = f"debug_page_{page}_failure.png"
-                    try:
-                        self.driver.screenshot(path=screenshot_path)
-                        self.logger.info(f"Saved debug screenshot to {screenshot_path}")
-                    except Exception as screenshot_e:
-                        self.logger.error(f"Failed to save screenshot: {screenshot_e}")
 
                 if attempt < max_retries - 1:
                     self.logger.info("Reloading page and retrying...")
@@ -180,12 +171,6 @@ class AmazonScraper:
                     self.rate_limiter.wait()
                 except Exception as e:
                     self.logger.error(f"Failed to click or navigate to the next page: {e}", exc_info=True)
-                    # Add a screenshot for debugging if the click/navigation fails
-                    try:
-                        self.driver.screenshot(path="debug_page_click_fail.png")
-                        self.logger.info("Saved debug screenshot to debug_page_click_fail.png")
-                    except Exception as screenshot_e:
-                        self.logger.error(f"Failed to save screenshot on click failure: {screenshot_e}")
                     break
 
             self.logger.info(f"Found {len(results)} products total")
